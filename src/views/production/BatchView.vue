@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import MetricCard from '@/components/MetricCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { BATCH_STATUS, statusMeta } from '@/utils/constants'
-import { BATCH_STATUS_CODE, batches, getBatchRouteProgress, lineOptions, processRoutes, products, releaseBatchToFirstProcess, workOrders } from '@/utils/mockData'
+import { BATCH_STATUS_CODE, WORK_ORDER_STATUS_CODE, batches, getBatchRouteProgress, lineOptions, processRoutes, products, releaseBatchToFirstProcess, workOrders } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -20,12 +20,14 @@ const createForm = reactive({
 })
 const batchLineSelections = ref([])
 
-const canOperateBatch = computed(() => userStore.hasAnyRole(['production_manager', 'team_leader', 'quality_engineer']))
+const canPlanBatch = computed(() => userStore.hasAnyRole(['production_manager']))
+const canCoordinateBatch = computed(() => userStore.hasAnyRole(['production_manager', 'team_leader']))
+const canQualityLock = computed(() => userStore.hasAnyRole(['quality_engineer', 'production_manager']))
 const batchWorkOrderIds = computed(() => new Set(batches.map((item) => item.workOrderId)))
 const availableWorkOrders = computed(() => workOrders.filter((item) => {
   const hasBatchRecord = batchWorkOrderIds.value.has(item.id) || item.releasedBatches > 0
   const remaining = Math.max((item.planned || 0) - (item.completed || 0), 0)
-  return !hasBatchRecord && remaining > 0 && !['completed', 'closed'].includes(item.status)
+  return !hasBatchRecord && remaining > 0 && ['released', 'running'].includes(item.status)
 }))
 const selectedWorkOrder = computed(() => workOrders.find((item) => item.id === createForm.workOrderId) || null)
 const selectedRoute = computed(() => processRoutes.find((item) => item.id === (selectedWorkOrder.value && selectedWorkOrder.value.routeId)) || null)
@@ -199,7 +201,8 @@ function submitCreateBatch() {
   const order = workOrders.find((item) => item.id === selectedWorkOrder.value.id)
   if (order) {
     order.releasedBatches += newItems.length
-    if (order.status === 'pending') order.status = 'running'
+    order.status = 'running'
+    order.Status = WORK_ORDER_STATUS_CODE.running
     if (order.releasedAt === '-') order.releasedAt = now
   }
 
@@ -208,11 +211,11 @@ function submitCreateBatch() {
 }
 
 async function operate(row, action) {
-  if (!canOperateBatch.value) {
-    ElMessage.warning('当前角色仅可查看批次，操作已拦截')
-    return
-  }
   if (action === '投产') {
+    if (!canPlanBatch.value) {
+      ElMessage.warning('当前角色无批次投产权限')
+      return
+    }
     if (row.status !== 'pending') {
       ElMessage.warning('只有待生产批次可以执行投产')
       return
@@ -223,6 +226,14 @@ async function operate(row, action) {
       return
     }
     ElMessage.success(row.id + ' 已投产，首道工序已进入待进站')
+    return
+  }
+  if (['暂停', '恢复'].includes(action) && !canCoordinateBatch.value) {
+    ElMessage.warning('当前角色无批次暂停 / 恢复权限')
+    return
+  }
+  if (['锁定', '解锁'].includes(action) && !canQualityLock.value) {
+    ElMessage.warning('当前角色无批次锁定 / 解锁权限')
     return
   }
   if (action === '解锁' && row.autoLocked && !userStore.hasAnyRole(['quality_engineer'])) {
@@ -236,13 +247,13 @@ async function operate(row, action) {
     row.autoLocked = false
   }
   if (action === '解锁') {
-    updateBatchStatus(row, 'running')
+    updateBatchStatus(row, 'running', value)
   }
   if (action === '暂停') {
-    updateBatchStatus(row, 'paused', row.lockReason)
+    updateBatchStatus(row, 'paused', value)
   }
   if (action === '恢复') {
-    updateBatchStatus(row, 'running', row.lockReason)
+    updateBatchStatus(row, 'running', value)
   }
   ElMessage.success(row.id + ' 已' + action + '，原因：' + value)
 }
@@ -256,9 +267,9 @@ async function operate(row, action) {
         <p class="page-subtitle">支持批次投产、锁定 / 解锁、暂停 / 恢复、批量操作与详情下钻；只有已投产批次才可进入上料与进站生产。</p>
       </div>
       <div class="table-actions">
-        <el-button type="primary" :disabled="!canOperateBatch" @click="openCreateDialog">新建批次</el-button>
-        <el-button :disabled="!canOperateBatch" @click="ElMessage.success('同产线批次已批量暂停')">批量暂停</el-button>
-        <el-button :disabled="!canOperateBatch" @click="ElMessage.success('同产线批次已批量恢复')">批量恢复</el-button>
+        <el-button type="primary" :disabled="!canPlanBatch" @click="openCreateDialog">新建批次</el-button>
+        <el-button :disabled="!canCoordinateBatch" @click="ElMessage.success('同产线批次已批量暂停')">批量暂停</el-button>
+        <el-button :disabled="!canCoordinateBatch" @click="ElMessage.success('同产线批次已批量恢复')">批量恢复</el-button>
       </div>
     </div>
 
@@ -320,10 +331,10 @@ async function operate(row, action) {
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" @click="router.push(batchDetailPath(row.id))">详情</el-button>
-              <el-button link type="warning" :disabled="row.status !== 'pending'" @click="operate(row, '投产')">投产</el-button>
-              <el-button link type="danger" :disabled="row.status === 'locked'" @click="operate(row, '锁定')">锁定</el-button>
-              <el-button link type="success" :disabled="row.status !== 'locked'" @click="operate(row, '解锁')">解锁</el-button>
-              <el-button link type="warning" @click="operate(row, row.status === 'paused' ? '恢复' : '暂停')">
+              <el-button link type="warning" :disabled="row.status !== 'pending' || !canPlanBatch" @click="operate(row, '投产')">投产</el-button>
+              <el-button link type="danger" :disabled="row.status === 'locked' || !canQualityLock" @click="operate(row, '锁定')">锁定</el-button>
+              <el-button link type="success" :disabled="row.status !== 'locked' || !canQualityLock" @click="operate(row, '解锁')">解锁</el-button>
+              <el-button link type="warning" :disabled="!canCoordinateBatch" @click="operate(row, row.status === 'paused' ? '恢复' : '暂停')">
                 <span v-if="row.status === 'paused'">恢复</span>
                 <span v-else>暂停</span>
               </el-button>
@@ -408,7 +419,7 @@ async function operate(row, action) {
       <template #footer>
         <div class="dialog-actions">
           <el-button @click="createDialogVisible = false">取消</el-button>
-          <el-button type="primary" :disabled="!selectedWorkOrder || !availableWorkOrders.length" @click="submitCreateBatch">确认创建</el-button>
+          <el-button type="primary" :disabled="!selectedWorkOrder || !availableWorkOrders.length || !canPlanBatch" @click="submitCreateBatch">确认创建</el-button>
         </div>
       </template>
     </el-dialog>

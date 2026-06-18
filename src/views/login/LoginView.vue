@@ -30,7 +30,9 @@ async function handleLogin() {
       post: roleName.value,
       role: loginForm.value.role,
       roles: [loginForm.value.role],
-      lines: loginForm.value.role === 'team_leader' || loginForm.value.role === 'operator' ? ['SMT-A1', 'SMT-A2'] : ['SMT-A1', 'SMT-A2', 'SMT-B1', 'SMT-B2'],
+      lines: loginForm.value.role === 'team_leader' || loginForm.value.role === 'operator'
+        ? ['SMT-A1', 'SMT-A2']
+        : ['SMT-A1', 'SMT-A2', 'SMT-B1', 'SMT-B2'],
     })
     router.push(route.query.redirect || firstAccessiblePath(loginForm.value.role))
   } finally {

@@ -9,7 +9,21 @@
       "Bash(choco --version)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Read(//c/Users/wehue/AppData/Local/GitHub CLI/**)",
+      "Read(//c/Users/wehue/AppData/Local/Programs/GitHub CLI/**)",
+      "Read(//c/Users/wehue/scoop/shims/**)",
+      "Bash(npm install *)",
+      "Read(//c/Users/wehue/AppData/Local/GitHubCLI/**)",
+      "Read(//c/Users/wehue/AppData/Local/**)",
+      "Bash($GH_CLI *)",
+      "Bash(/c/Users/wehue/AppData/Local/Microsoft/WinGet/Packages/GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe/bin/gh.exe auth *)",
+      "Bash(/c/Users/wehue/AppData/Local/Microsoft/WinGet/Packages/GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe/bin/gh.exe repo *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)"
     ]
   }
 }

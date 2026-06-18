@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { firstAccessiblePath, PERMISSION_CODES, roleHasPermission } from '@/utils/constants'
+import { firstAccessiblePath, isRtmRole, PERMISSION_CODES, roleHasPermission } from '@/utils/constants'
 
 NProgress.configure({ showSpinner: false })
 
@@ -37,7 +37,13 @@ const routes = [
             path: 'work-order/:id',
             name: 'WorkOrderDetail',
             component: () => import('@/views/production/WorkOrderDetailView.vue'),
-            meta: { title: '工单详情', module: '生产调度', permission: PERMISSION_CODES.WORK_ORDER },
+            meta: {
+              title: '工单详情',
+              module: '生产调度',
+              parent: { title: '工单管理', path: '/production/work-order' },
+              activeMenu: '/production/work-order',
+              permission: PERMISSION_CODES.WORK_ORDER,
+            },
           },
           {
             path: 'batch',
@@ -49,7 +55,13 @@ const routes = [
             path: 'batch/:id',
             name: 'BatchDetail',
             component: () => import('@/views/production/BatchDetailView.vue'),
-            meta: { title: '批次详情', module: '生产调度', permission: PERMISSION_CODES.BATCH },
+            meta: {
+              title: '批次详情',
+              module: '生产调度',
+              parent: { title: '批次管理', path: '/production/batch' },
+              activeMenu: '/production/batch',
+              permission: PERMISSION_CODES.BATCH,
+            },
           },
         ],
       },
@@ -164,6 +176,11 @@ router.beforeEach((to) => {
   try {
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
     const role = userInfo.role || 'admin'
+    if (!isRtmRole(role)) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('userInfo')
+      return { path: '/login', query: { redirect: to.fullPath } }
+    }
     const permission = to.meta.permission
     if (permission && !roleHasPermission(role, permission)) {
       return { path: firstAccessiblePath(role) }
@@ -176,7 +193,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title || 'MES-RTM'} - MES-RTM`
+  document.title = `${to.meta.title || 'MES-RTM'} - MES-RTM-end`
   NProgress.done()
 })
 

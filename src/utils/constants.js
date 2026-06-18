@@ -1,10 +1,8 @@
 export const ROLES = [
-  { value: 'process_engineer', label: '工艺工程师' },
-  { value: 'operator', label: '操作工' },
-  { value: 'team_leader', label: '班组长' },
   { value: 'production_manager', label: '生产主管' },
+  { value: 'team_leader', label: '班组长' },
+  { value: 'operator', label: '操作工' },
   { value: 'quality_engineer', label: '质量工程师' },
-  { value: 'repairman', label: '维修员' },
   { value: 'admin', label: '工厂管理层' },
 ]
 
@@ -23,18 +21,13 @@ export const PERMISSION_CODES = {
 }
 
 export const ROLE_PERMISSIONS = {
-  process_engineer: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.DEVICE,
-    PERMISSION_CODES.SYSTEM,
-  ],
   production_manager: [
     PERMISSION_CODES.DASHBOARD,
     PERMISSION_CODES.KANBAN,
     PERMISSION_CODES.WORK_ORDER,
     PERMISSION_CODES.BATCH,
     PERMISSION_CODES.TRACKING,
+    PERMISSION_CODES.DEVICE,
     PERMISSION_CODES.SYSTEM,
   ],
   team_leader: [
@@ -44,6 +37,7 @@ export const ROLE_PERMISSIONS = {
     PERMISSION_CODES.CHECK_IN,
     PERMISSION_CODES.CHECK_OUT,
     PERMISSION_CODES.TRACKING,
+    PERMISSION_CODES.DEVICE,
     PERMISSION_CODES.SYSTEM,
   ],
   operator: [
@@ -62,26 +56,22 @@ export const ROLE_PERMISSIONS = {
     PERMISSION_CODES.CHECK_OUT,
     PERMISSION_CODES.REPAIR,
     PERMISSION_CODES.TRACKING,
-    PERMISSION_CODES.SYSTEM,
-  ],
-  repairman: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.REPAIR,
-    PERMISSION_CODES.TRACKING,
+    PERMISSION_CODES.DEVICE,
     PERMISSION_CODES.SYSTEM,
   ],
   admin: Object.values(PERMISSION_CODES),
 }
 
 export const ROLE_HOME_PATH = {
-  process_engineer: '/device',
   production_manager: '/production/work-order',
   team_leader: '/execution/loading',
   operator: '/execution/loading',
   quality_engineer: '/execution/repair',
-  repairman: '/execution/repair',
   admin: '/dashboard',
+}
+
+export function isRtmRole(role) {
+  return role === 'admin' || Boolean(ROLE_PERMISSIONS[role])
 }
 
 export function roleHasPermission(role, permission) {
@@ -106,6 +96,7 @@ export const WORK_ORDER_STATUS = {
   paused: { label: '暂停', type: 'warning', color: '#d97706' },
   completed: { label: '已完成', type: 'success', color: '#16a34a' },
   closed: { label: '已关闭', type: 'info', color: '#6b7280' },
+  released: { label: '已释放', type: 'warning', color: '#d97706' },
 }
 
 export const BATCH_STATUS = {

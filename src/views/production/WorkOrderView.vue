@@ -14,6 +14,7 @@ const dialogVisible = ref(false)
 const filters = reactive({ keyword: '', productModel: '', status: '', line: '', due: [] })
 const query = reactive({ keyword: '', productModel: '', status: '', line: '', due: [] })
 const form = reactive({ productModel: '', routeId: '', planned: 1000, dueDate: '' })
+const workOrderStatusKeys = ['pending', 'released', 'running', 'paused', 'completed', 'closed']
 
 const canManage = computed(() => userStore.hasAnyRole(['production_manager']))
 const availableRoutes = computed(() => routeOptionsByProduct(form.productModel))
@@ -28,9 +29,9 @@ const filteredOrders = computed(() => workOrders.filter((item) => {
   return keyword && model && status && line
 }))
 
-const statusCards = computed(() => Object.entries(WORK_ORDER_STATUS).map(([key, meta]) => ({
+const statusCards = computed(() => workOrderStatusKeys.map((key) => ({
   key,
-  ...meta,
+  ...WORK_ORDER_STATUS[key],
   count: workOrders.filter((item) => item.status === key).length,
 })))
 
@@ -102,16 +103,41 @@ function handleReset() {
   ElMessage.info('筛选条件已重置')
 }
 
+function setOrderStatus(order, status) {
+  order.status = status
+  order.Status = WORK_ORDER_STATUS_CODE[status] || order.Status
+}
+
 function operate(order, action) {
   if (!canManage.value) {
     ElMessage.warning('班组长仅有查看权限，操作已拦截')
     return
   }
   if (action === 'release' && order.status === 'pending') {
+    setOrderStatus(order, 'released')
+    if (order.releasedAt === '-') {
+      order.releasedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+    }
     ElMessage.success('工艺路线、BOM、参数模板校验完整，工单已释放')
     return
   }
-  ElMessage.success(`${order.id} 已执行${action}`)
+  if (action === '暂停' && order.status === 'running') {
+    setOrderStatus(order, 'paused')
+    ElMessage.success(`${order.id} 已暂停`)
+    return
+  }
+  if (action === '恢复' && order.status === 'paused') {
+    setOrderStatus(order, 'running')
+    ElMessage.success(`${order.id} 已恢复生产`)
+    return
+  }
+  if (action === '关闭' && order.status === 'completed') {
+    setOrderStatus(order, 'closed')
+    order.closedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+    ElMessage.success(`${order.id} 已关闭`)
+    return
+  }
+  ElMessage.warning('当前工单状态不支持该操作')
 }
 </script>
 
@@ -144,7 +170,7 @@ function operate(order, action) {
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 130px">
-            <el-option v-for="(meta, key) in WORK_ORDER_STATUS" :key="key" :label="meta.label" :value="key" />
+            <el-option v-for="key in workOrderStatusKeys" :key="key" :label="WORK_ORDER_STATUS[key].label" :value="key" />
           </el-select>
         </el-form-item>
         <el-form-item label="产线">
@@ -189,12 +215,13 @@ function operate(order, action) {
         <el-table-column prop="creator" label="创建人" width="130" />
         <el-table-column prop="createdAt" label="创建时间" width="230" />
         <el-table-column prop="releasedAt" label="释放时间" width="230" />
-        <el-table-column fixed="right" label="操作" width="260">
+        <el-table-column fixed="right" label="操作" width="310">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" @click="router.push(`/production/work-order/${row.id}`)">详情</el-button>
               <el-button link type="success" :disabled="row.status !== 'pending'" @click="operate(row, 'release')">释放</el-button>
               <el-button link type="warning" :disabled="row.status !== 'running'" @click="operate(row, '暂停')">暂停</el-button>
+              <el-button link type="success" :disabled="row.status !== 'paused'" @click="operate(row, '恢复')">恢复</el-button>
               <el-button link type="danger" :disabled="row.status !== 'completed'" @click="operate(row, '关闭')">关闭</el-button>
             </div>
           </template>

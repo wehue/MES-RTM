@@ -5,6 +5,7 @@ const NOW = '2026-05-20 14:30'
 export const WORK_ORDER_STATUS_CODE = {
   draft: 1,
   pending: 2,
+  released: 2,
   running: 3,
   paused: 4,
   completed: 5,
@@ -355,10 +356,29 @@ export function fillBatchMaterial(batchId, payload) {
   if (!target) {
     return { ok: false, message: '站位不存在。' }
   }
+  const scannedCode = String(payload.materialCode || '').trim()
+  if (!scannedCode) {
+    return { ok: false, message: '物料条码不能为空。' }
+  }
+  const allowedMaterials = [target.material]
+  if (target.substitute && target.substitute !== '-') {
+    allowedMaterials.push(...String(target.substitute).split(/[、,，/]/).map((item) => item.trim()).filter(Boolean))
+  }
+  const matchedMaterial = allowedMaterials.find((material) => scannedCode === material || scannedCode.startsWith(`${material}#`))
+  if (!matchedMaterial) {
+    return {
+      ok: false,
+      message: `物料不匹配：站位 ${target.station} 需要 ${target.material}${target.substitute && target.substitute !== '-' ? `，允许替代料 ${target.substitute}` : ''}。`,
+    }
+  }
   const addedQty = Math.max(Number(payload.loaded) || 0, 0)
+  if (addedQty <= 0) {
+    return { ok: false, message: '上料数量必须大于 0。' }
+  }
   target.loaded = Math.min(target.loaded + addedQty, target.required)
   target.status = target.loaded >= target.required ? '已齐套' : '待补料'
   target.scannedMaterial = payload.materialCode
+  target.matchedMaterial = matchedMaterial
   target.lastLoadedAt = payload.loadedAt
   target.operator = payload.operator
   target.lastAddedQty = addedQty

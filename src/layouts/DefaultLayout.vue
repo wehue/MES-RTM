@@ -30,8 +30,22 @@ const roleLabel = computed(() => {
 })
 
 const displayName = computed(() => userStore.userInfo.name || '系统管理员')
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => route.meta?.activeMenu || route.path)
 const unreadCount = computed(() => messages.filter((item) => item.unread).length)
+const breadcrumbItems = computed(() => {
+  const moduleTitle = route.meta?.module || '首页'
+  const title = route.meta?.title || '生产驾驶舱'
+  const items = [{ title: moduleTitle }]
+
+  if (route.meta?.parent) {
+    items.push(route.meta.parent)
+  }
+  if (title !== moduleTitle || items.length > 1) {
+    items.push({ title })
+  }
+
+  return items
+})
 
 const allMenuItems = [
   { index: '/dashboard', icon: DataBoard, title: '首页', permission: PERMISSION_CODES.DASHBOARD },
@@ -132,8 +146,13 @@ function handleCommand(command) {
         <div class="header-left">
           <el-button text :icon="isCollapsed ? Expand : Fold" @click="isCollapsed = !isCollapsed" />
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item>{{ route.meta?.module || '首页' }}</el-breadcrumb-item>
-            <el-breadcrumb-item>{{ route.meta?.title || '生产驾驶舱' }}</el-breadcrumb-item>
+            <el-breadcrumb-item
+              v-for="item in breadcrumbItems"
+              :key="item.title"
+              :to="item.path ? { path: item.path } : undefined"
+            >
+              {{ item.title }}
+            </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
 

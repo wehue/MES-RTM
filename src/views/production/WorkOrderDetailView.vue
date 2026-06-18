@@ -86,7 +86,9 @@ const stepSeries = [{
 
       <SectionCard class="span-12" title="工单进度跟踪">
         <div class="progress-section">
-          <el-progress type="dashboard" :percentage="percent(order.completed, order.planned)" />
+          <div class="progress-gauge">
+            <el-progress type="dashboard" :width="180" :stroke-width="10" :percentage="percent(order.completed, order.planned)" />
+          </div>
           <SimpleChart type="bar" :x="processTimeline.map((item) => item.step)" :series="stepSeries" height="260px" />
         </div>
       </SectionCard>
@@ -97,15 +99,26 @@ const stepSeries = [{
 <style scoped>
 .progress-section {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  align-items: stretch;
   gap: 24px;
+}
+
+.progress-gauge {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  justify-self: stretch;
 }
 
 @media (max-width: 720px) {
   .progress-section {
     grid-template-columns: 1fr;
     justify-items: center;
+  }
+
+  .progress-gauge {
+    width: 100%;
   }
 }
 </style>

@@ -47,7 +47,7 @@ async function submitLoading() {
     operator: form.operator,
   })
   if (!result.ok) {
-    ElMessage.error(result.message)
+    await ElMessageBox.alert(result.message, '上料校验失败', { type: 'error' })
     return
   }
   const nextValidation = validateBatchLoading(currentBatch.value.id)
@@ -68,7 +68,7 @@ function autoFillTask(task) {
     <div class="page-header">
       <div>
         <h1 class="page-title">上料管理</h1>
-        <p class="page-subtitle">对待进站批次录入上料信息，进站时统一与 MDM BOM 做齐套校验。</p>
+        <p class="page-subtitle">对待进站批次录入上料信息，首道进站时统一与 MDM BOM 做齐套校验。</p>
       </div>
       <div class="table-actions">
         <el-button @click="router.push('/execution/check-in')">返回进站操作</el-button>
@@ -107,7 +107,7 @@ function autoFillTask(task) {
 
         <SectionCard
           class="span-12"
-          title="当前工序 BOM 上料完整清单"
+          title="批次 BOM 上料完整清单"
           subtitle="点击待补料项可直接带入右侧补料录入区"
         >
           <el-table :data="tasks" border :row-class-name="({ row }) => row.loaded < row.required ? 'warning-row' : ''" @row-click="autoFillTask">
@@ -134,7 +134,7 @@ function autoFillTask(task) {
           <template v-else>
             <el-form label-position="top" class="supply-form">
               <el-form-item label="补充物料条码">
-                <el-input v-model="form.materialCode" size="large" placeholder="例如：R0603-10K#LOT20260520-01" />
+                <el-input v-model="form.materialCode" size="large" :placeholder="`例如：${selectedTask.material}#LOT20260520-01`" />
               </el-form-item>
               <el-form-item label="补充数量">
                 <el-input-number v-model="form.loadedQty" size="large" :min="0" :max="Math.max(selectedTask.required - selectedTask.loaded, 0)" />

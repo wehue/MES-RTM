@@ -14,9 +14,9 @@ const form = reactive({
   scrapQty: 0,
   reason: '',
   prevention: '',
-  repairman: userStore.userInfo.name || '维修员',
+  handler: userStore.userInfo.name || '质量工程师',
 })
-const canAudit = computed(() => userStore.hasAnyRole(['quality_engineer', 'production_manager']))
+const canManageRepair = computed(() => userStore.hasAnyRole(['quality_engineer']))
 
 watch(selected, (task) => {
   if (!task) return
@@ -32,8 +32,8 @@ function submitRepair() {
     ElMessage.error('当前没有维修任务')
     return
   }
-  if (!canAudit.value) {
-    ElMessage.error('当前角色不能提交维修结果')
+  if (!canManageRepair.value) {
+    ElMessage.error('当前角色只能查看维修记录，质量工程师可提交维修处理结果')
     return
   }
   const result = submitRepairResult(selected.value.batchId, {
@@ -55,7 +55,7 @@ function submitRepair() {
     <div class="page-header">
       <div>
         <h1 class="page-title">维修管理</h1>
-        <p class="page-subtitle">承接出站生成的维修任务，完成处理后让批次回流或关闭。</p>
+        <p class="page-subtitle">质量工程师承接出站生成的维修任务，完成处理后让批次回流或关闭。</p>
       </div>
     </div>
 
@@ -93,11 +93,12 @@ function submitRepair() {
             </el-form-item>
             <el-form-item label="维修数量"><el-input-number v-model="form.repairQty" :min="0" /></el-form-item>
             <el-form-item label="报废数量"><el-input-number v-model="form.scrapQty" :min="0" /></el-form-item>
+            <el-form-item label="处理人"><el-input v-model="form.handler" /></el-form-item>
             <el-form-item label="原因分析"><el-input v-model="form.reason" type="textarea" /></el-form-item>
             <el-form-item label="预防措施"><el-input v-model="form.prevention" type="textarea" /></el-form-item>
           </el-form>
           <div class="table-actions">
-            <el-button type="primary" @click="submitRepair">提交维修结果</el-button>
+            <el-button type="primary" :disabled="!canManageRepair" @click="submitRepair">提交维修结果</el-button>
           </div>
         </template>
       </SectionCard>
