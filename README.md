@@ -1,38 +1,315 @@
-# MES-RTM
+# MES-RTM 实时制造执行系统原型
 
-This template should help get you started developing with Vue 3 in Vite.
+MES-RTM 是面向 SMT 产线的实时制造执行子系统前端原型，覆盖工单调度、批次投产、上料齐套、进站、出站、维修回流、批次追溯、设备监控和看板展示等核心流程。
 
-## Recommended IDE Setup
+当前项目可作为产品原型和前后端联调基础使用。静态主数据来源于 MES-MDM，RTM 侧只读使用产品、BOM、工艺路线、设备、产线、用户角色等数据，主要负责生产执行过程中的动态业务数据。
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 技术栈
 
-## Recommended Browser Setup
+| 类型 | 技术 |
+| --- | --- |
+| 前端框架 | Vue 3 |
+| 构建工具 | Vite |
+| UI 组件 | Element Plus |
+| 状态管理 | Pinia |
+| 路由 | Vue Router |
+| 图表 | ECharts / vue-echarts |
+| 请求封装 | Axios |
+| 样式 | SCSS |
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+## 运行环境
 
-## Customize configuration
+`package.json` 中要求：
 
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-pnpm install
+```text
+Node.js ^20.19.0 或 >=22.12.0
 ```
 
-### Compile and Hot-Reload for Development
+项目中同时存在 `package-lock.json` 和 `pnpm-lock.yaml`。当前本地开发已使用 npm 可正常构建，建议统一使用 npm。
 
-```sh
-pnpm dev
+## 安装与运行
+
+```bash
+npm install
 ```
 
-### Compile and Minify for Production
+启动开发服务：
 
-```sh
-pnpm build
+```bash
+npm run dev
 ```
+
+默认端口在 `vite.config.js` 中配置为：
+
+```text
+http://localhost:3000
+```
+
+生产构建：
+
+```bash
+npm run build
+```
+
+本地预览构建产物：
+
+```bash
+npm run preview
+```
+
+## 登录与角色
+
+当前原型登录为前端模拟登录，不连接真实后端。可在登录页选择角色进入系统。
+
+RTM 角色以当前项目为准：
+
+| 角色编码 | 中文角色 | 默认入口 | 主要权限 |
+| --- | --- | --- | --- |
+| production_manager | 生产主管 | 工单管理 | 工单、批次、看板、追溯、设备 |
+| team_leader | 班组长 | 上料管理 | 上料、进站、出站、追溯、设备 |
+| operator | 操作工 | 上料管理 | 上料、进站、出站、追溯 |
+| quality_engineer | 质量工程师 | 维修管理 | 批次质量处理、出站、维修、追溯、设备 |
+| admin | 工厂管理层 | 首页 | 全部模块 |
+
+说明：
+
+- RTM 中没有维修员角色。
+- 工艺工程师属于 MDM 侧角色，不登录 RTM。
+- 独立质量管理页面第一版暂不实现，但出站质量判定、批次锁定、维修回流属于生产闭环，仍保留。
+
+## 功能模块
+
+### 首页
+
+- 当日工单总数、在制批次数、直通率、计划完成率。
+- 产线状态总览。
+- 异常告警。
+- 工单生产进度。
+- 质量趋势图。
+
+### 生产调度
+
+工单管理：
+
+- 工单筛选、状态统计、列表查看。
+- 新建工单。
+- 工单释放。
+- 工单暂停、恢复、关闭。
+- 工单详情查看。
+- 工单详情包含产品 BOM、工艺路线、批次列表和工单进度。
+
+批次管理：
+
+- 批次筛选、状态统计、列表查看。
+- 按已释放或生产中工单创建批次。
+- 批次投产。
+- 批次暂停、恢复、锁定、解锁。
+- 批次详情查看。
+
+### 生产执行
+
+上料管理：
+
+- 展示待上料批次。
+- 按批次 BOM 显示上料任务。
+- 扫描或录入物料条码。
+- 校验 BOM 主料和替代料。
+- 首道进站前做整批 BOM 齐套校验。
+
+进站操作：
+
+- 展示待进站批次。
+- 校验批次状态、上一工序、设备、BOM 齐套情况。
+- 绑定设备并提交进站。
+
+出站操作：
+
+- 展示可出站批次。
+- 普通工序校验良品、不良、报废数量。
+- SPI/AOI 工序按产品阈值校验通过率。
+- 支持强制出站、批次锁定。
+- 不良可生成维修任务。
+
+维修管理：
+
+- 质量工程师处理维修任务。
+- 维修合格后批次回到当前工序待进站。
+- 转报废后批次关闭或完成。
+
+批次跟踪：
+
+- 查看批次基础信息。
+- 查看工序流转记录。
+- 查看上料记录和维修记录。
+- 导出追溯报告。
+
+### 设备监控
+
+- 设备列表和状态筛选。
+- 运行、待机、故障、离线等状态展示。
+- 故障提报。
+- 保养确认。
+- OEE 信息展示。
+
+### 看板中心
+
+- 产线状态看板。
+- 质量监控看板。
+- 生产进度看板。
+- 支持从系统入口进入大屏页面。
+
+### 系统功能
+
+- 个人中心。
+- 消息通知。
+- 未读消息提示。
+
+## 核心业务流
+
+```text
+新建工单
+  -> 工单释放
+  -> 创建批次
+  -> 批次投产
+  -> 生成首道工序待进站
+  -> 批次 BOM 上料齐套
+  -> 进站
+  -> 出站
+  -> 下一工序待进站
+  -> 全部工序完成
+  -> 批次完成
+```
+
+异常分支：
+
+```text
+出站产生不良
+  -> 生成维修任务
+  -> 质量工程师提交维修结果
+  -> 维修合格回流当前工序待进站
+```
+
+```text
+SPI/AOI 通过率低于阈值
+  -> 强制出站
+  或
+  -> 批次锁定
+```
+
+## 状态说明
+
+工单状态：
+
+| 状态 | 中文 |
+| --- | --- |
+| pending | 待释放 |
+| released | 已释放 |
+| running | 生产中 |
+| paused | 暂停 |
+| completed | 已完成 |
+| closed | 已关闭 |
+
+批次状态：
+
+| 状态 | 中文 |
+| --- | --- |
+| pending | 待生产 |
+| running | 生产中 |
+| paused | 暂停 |
+| repair | 维修中 |
+| locked | 已锁定 |
+| completed | 已完成 |
+
+工序状态：
+
+| 状态 | 中文 |
+| --- | --- |
+| wait_in | 待进站 |
+| checked_in | 已进站 |
+| checked_out | 已出站 |
+| paused | 暂停 |
+| locked | 锁定 |
+| skipped | 跳过 |
+
+## 项目结构
+
+```text
+src
+├─ api                 # 后端接口封装雏形
+├─ assets              # 静态资源
+├─ components          # 通用组件
+├─ layouts             # 默认布局和看板布局
+├─ router              # 路由和权限守卫
+├─ stores              # Pinia 状态
+├─ styles              # 全局样式
+├─ utils               # 常量、mock 数据、请求封装
+└─ views               # 页面
+   ├─ dashboard        # 首页
+   ├─ execution        # 上料、进站、出站、维修、追溯、设备监控
+   ├─ kanban           # 大屏看板
+   ├─ login            # 登录
+   ├─ production       # 工单、批次
+   ├─ quality          # 质量模块占位，第一版不启用
+   └─ system           # 个人中心、消息通知
+```
+
+## 重要文档
+
+| 文件 | 说明 |
+| --- | --- |
+| `MES-RTM整合版.md` | 产品需求、页面需求和操作逻辑整合文档 |
+| `MES-RTM后端接口开发说明.md` | 后端接口开发说明，包含接口、字段、状态、流转、验收点 |
+| `smt_mes.sql` | SMT MES 数据库建表脚本 |
+| `SMT场景下的MES系统功能需求.docx` | 原始需求文档 |
+
+## 后端联调说明
+
+请求封装位于：
+
+```text
+src/utils/request.js
+```
+
+默认接口前缀：
+
+```text
+/api
+```
+
+开发代理位于 `vite.config.js`：
+
+```js
+server: {
+  port: 3000,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:8080',
+      changeOrigin: true,
+    },
+  },
+}
+```
+
+后端接口开发请优先参考：
+
+```text
+MES-RTM后端接口开发说明.md
+```
+
+## 当前实现说明
+
+- 当前数据主要来自 `src/utils/mockData.js`。
+- 登录、权限、生产流转均为前端模拟。
+- `src/api` 下已有接口封装雏形，后续接入真实后端时可逐步替换页面中的 mock 数据。
+- 表格、面包屑、角色权限、工单/批次状态已经按当前原型逻辑调整。
+
+## 构建验证
+
+当前项目可通过：
+
+```bash
+npm run build
+```
+
+构建时可能出现来自依赖包的 Rolldown 注释警告或 chunk 体积警告，不影响当前功能运行。
+

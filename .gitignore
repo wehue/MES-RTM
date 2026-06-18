@@ -23,6 +23,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Claude local settings
+.claude/settings.local.json
+
 # Editor directories and files
 *.suo
 *.ntvs*
