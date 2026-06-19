@@ -193,7 +193,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title || 'MES-RTM'} - MES-RTM-end`
+  document.title = `${to.meta.title || 'MES-RTM'}-MES-RTM-frontend-完整`
   NProgress.done()
 })
 

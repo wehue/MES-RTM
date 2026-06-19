@@ -95,10 +95,8 @@ export const WORK_ORDER_STATUS = {
 export const BATCH_STATUS = {
   1: { label: '待生产', type: 'warning', color: '#b7791f' },
   2: { label: '生产中', type: 'primary', color: '#2563eb' },
-  3: { label: '暂停', type: 'warning', color: '#d97706' },
-  4: { label: '维修中', type: 'danger', color: '#dc2626' },
-  5: { label: '已锁定', type: 'danger', color: '#dc2626' },
-  6: { label: '已完成', type: 'success', color: '#16a34a' },
+  3: { label: '已完成', type: 'success', color: '#16a34a' },
+  4: { label: '已暂停', type: 'warning', color: '#d97706' },
 }
 
 export const PROCESS_STATUS = {

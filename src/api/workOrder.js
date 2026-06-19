@@ -4,26 +4,34 @@ export function getWorkOrderList(params) {
   return request.get('/work-orders', { params })
 }
 
+export function getWorkOrderStatusStats() {
+  return request.get('/work-orders/status-stats')
+}
+
 export function getWorkOrderDetail(id) {
-  return request.get(`/work-orders/${id}`)
+  return request.get('/work-orders/detail', { params: { id } })
 }
 
 export function createWorkOrder(data) {
   return request.post('/work-orders', data)
 }
 
-export function releaseWorkOrder(id, data) {
-  return request.post(`/work-orders/${id}/release`, data)
+export function updateWorkOrderStatus(id, status) {
+  return request.put('/work-orders/status', null, { params: { id, status } })
 }
 
-export function pauseWorkOrder(id, reason) {
-  return request.post(`/work-orders/${id}/pause`, { reason })
+export function releaseWorkOrder(id) {
+  return updateWorkOrderStatus(id, 2)
+}
+
+export function pauseWorkOrder(id) {
+  return updateWorkOrderStatus(id, 4)
 }
 
 export function resumeWorkOrder(id) {
-  return request.post(`/work-orders/${id}/resume`)
+  return updateWorkOrderStatus(id, 3)
 }
 
 export function closeWorkOrder(id) {
-  return request.post(`/work-orders/${id}/close`)
+  return updateWorkOrderStatus(id, 6)
 }

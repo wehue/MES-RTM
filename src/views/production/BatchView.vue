@@ -47,7 +47,7 @@ const canPlanBatch = computed(() => userStore.hasAnyRole(['production_manager'])
 const canCoordinateBatch = computed(() => userStore.hasAnyRole(['production_manager', 'team_leader']))
 const canQualityLock = computed(() => userStore.hasAnyRole(['quality_engineer', 'production_manager']))
 const currentUserId = computed(() => findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3)
-const batchStatusCodes = [1, 2, 3, 4, 5, 6]
+const batchStatusCodes = Object.keys(BATCH_STATUS).map(Number)
 
 function getCreatedQuantity(order) {
   return batches
