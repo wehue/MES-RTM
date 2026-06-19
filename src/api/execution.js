@@ -8,8 +8,8 @@ export function checkOut(data) {
   return request.post('/execution/check-out', data)
 }
 
-export function getLoadingTasks(batchId, processId) {
-  return request.get('/execution/loading-tasks', { params: { batchId, processId } })
+export function getLoadingTasks(LotId, RouteStepId) {
+  return request.get('/execution/loading-tasks', { params: { LotId, RouteStepId } })
 }
 
 export function verifyLoading(data) {

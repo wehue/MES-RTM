@@ -3,10 +3,21 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import MetricCard from '@/components/MetricCard.vue'
 import SimpleChart from '@/components/SimpleChart.vue'
-import { batches, defectDistribution, lines, qualityTrend } from '@/utils/mockData'
+import { BATCH_STATUS, statusMeta } from '@/utils/constants'
+import {
+  BATCH_STATUS_CODE,
+  batches,
+  defectDistribution,
+  getBatchDefectQuantity,
+  getBatchProduct,
+  getCurrentOperationName,
+  getLineDashboardRows,
+  qualityTrend,
+} from '@/utils/mockData'
 
 const router = useRouter()
-const abnormalBatches = computed(() => batches.filter((item) => item.defective > 0 || item.status === 'repair' || item.status === 'locked'))
+const lineRows = computed(() => getLineDashboardRows())
+const abnormalBatches = computed(() => batches.filter((item) => getBatchDefectQuantity(item) > 0 || [BATCH_STATUS_CODE.repair, BATCH_STATUS_CODE.locked].includes(item.Status)))
 </script>
 
 <template>
@@ -38,15 +49,24 @@ const abnormalBatches = computed(() => batches.filter((item) => item.defective >
       </el-card>
       <el-card class="kanban-card span-6" shadow="never">
         <template #header>产线质量排行</template>
-        <SimpleChart theme="dark" type="bar" :x="lines.map((item) => item.id)" :series="[{ name: '良率', data: [98.8, 97.5, 94.1, 98.9] }]" height="300px" />
+        <SimpleChart theme="dark" type="bar" :x="lineRows.map((item) => item.LineCode)" :series="[{ name: '良率', data: [98.8, 97.5, 94.1, 98.9] }]" height="300px" />
       </el-card>
       <el-card class="kanban-card span-6" shadow="never">
         <template #header>异常批次明细</template>
         <el-table :data="abnormalBatches" size="small">
-          <el-table-column prop="id" label="批次" />
-          <el-table-column prop="currentStep" label="工序" />
-          <el-table-column prop="defective" label="不良数" />
-          <el-table-column prop="status" label="状态" />
+          <el-table-column prop="LotCode" label="批次" />
+          <el-table-column label="产品">
+            <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="工序">
+            <template #default="{ row }">{{ getCurrentOperationName(row) }}</template>
+          </el-table-column>
+          <el-table-column label="不良数">
+            <template #default="{ row }">{{ getBatchDefectQuantity(row) }}</template>
+          </el-table-column>
+          <el-table-column label="状态">
+            <template #default="{ row }">{{ statusMeta(BATCH_STATUS, row.Status).label }}</template>
+          </el-table-column>
         </el-table>
       </el-card>
     </div>

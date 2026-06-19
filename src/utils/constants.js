@@ -90,13 +90,6 @@ export const WORK_ORDER_STATUS = {
   4: { label: '已暂停', type: 'warning', color: '#d97706' },
   5: { label: '已完成', type: 'success', color: '#16a34a' },
   6: { label: '已关闭', type: 'info', color: '#6b7280' },
-  draft: { label: '待创建', type: 'info', color: '#909399' },
-  pending: { label: '待释放', type: 'warning', color: '#d97706' },
-  running: { label: '生产中', type: 'primary', color: '#2563eb' },
-  paused: { label: '暂停', type: 'warning', color: '#d97706' },
-  completed: { label: '已完成', type: 'success', color: '#16a34a' },
-  closed: { label: '已关闭', type: 'info', color: '#6b7280' },
-  released: { label: '已释放', type: 'warning', color: '#d97706' },
 }
 
 export const BATCH_STATUS = {
@@ -106,12 +99,6 @@ export const BATCH_STATUS = {
   4: { label: '维修中', type: 'danger', color: '#dc2626' },
   5: { label: '已锁定', type: 'danger', color: '#dc2626' },
   6: { label: '已完成', type: 'success', color: '#16a34a' },
-  pending: { label: '待生产', type: 'warning', color: '#b7791f' },
-  running: { label: '生产中', type: 'primary', color: '#2563eb' },
-  paused: { label: '暂停', type: 'warning', color: '#d97706' },
-  repair: { label: '维修中', type: 'danger', color: '#dc2626' },
-  locked: { label: '已锁定', type: 'danger', color: '#dc2626' },
-  completed: { label: '已完成', type: 'success', color: '#16a34a' },
 }
 
 export const PROCESS_STATUS = {
@@ -121,12 +108,6 @@ export const PROCESS_STATUS = {
   4: { label: '暂停', type: 'warning', color: '#d97706' },
   5: { label: '锁定', type: 'danger', color: '#dc2626' },
   6: { label: '跳过', type: 'info', color: '#6b7280' },
-  wait_in: { label: '待进站', type: 'info', color: '#64748b' },
-  checked_in: { label: '已进站', type: 'primary', color: '#2563eb' },
-  checked_out: { label: '已出站', type: 'success', color: '#16a34a' },
-  paused: { label: '暂停', type: 'warning', color: '#d97706' },
-  locked: { label: '锁定', type: 'danger', color: '#dc2626' },
-  skipped: { label: '跳过', type: 'info', color: '#6b7280' },
 }
 
 export const DEVICE_STATUS = {
@@ -139,14 +120,15 @@ export const DEVICE_STATUS = {
   running: { label: '运行', type: 'success', color: '#16a34a' },
   standby: { label: '待机', type: 'warning', color: '#d97706' },
   fault: { label: '故障', type: 'danger', color: '#dc2626' },
+  maintenance: { label: '保养', type: 'warning', color: '#d97706' },
   offline: { label: '离线', type: 'info', color: '#6b7280' },
+  scrapped: { label: '报废', type: 'danger', color: '#dc2626' },
 }
 
 export const DEVICE_TYPES = [
   '印刷机',
   'SPI 检测仪',
-  '高速贴片机',
-  '通用贴片机',
+  '贴片机',
   '回流炉',
   'AOI 检测仪',
 ]

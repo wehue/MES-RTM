@@ -11,16 +11,16 @@ const list = ref([...messages])
 const detail = ref(null)
 const tabs = ['全部', '告警通知', '生产通知', '质量通知', '系统通知']
 
-const filtered = computed(() => active.value === '全部' ? list.value : list.value.filter((item) => item.category === active.value))
+const filtered = computed(() => active.value === '全部' ? list.value : list.value.filter((item) => item.Category === active.value))
 
 function markAllRead() {
-  list.value.forEach((item) => { item.unread = false })
+  list.value.forEach((item) => { item.IsUnread = false })
   ElMessage.success('已全部标记为已读')
 }
 
 async function remove(item) {
-  await ElMessageBox.confirm(`确认删除消息：${item.title}？`, '删除消息')
-  list.value = list.value.filter((row) => row.id !== item.id)
+  await ElMessageBox.confirm(`确认删除消息：${item.Title}？`, '删除消息')
+  list.value = list.value.filter((row) => row.Id !== item.Id)
 }
 </script>
 
@@ -39,16 +39,16 @@ async function remove(item) {
         <el-tab-pane v-for="tab in tabs" :key="tab" :label="tab" :name="tab" />
       </el-tabs>
 
-      <el-table :data="filtered" border :row-class-name="({ row }) => row.category === '告警通知' ? 'danger-row' : ''">
-        <el-table-column label="状态" width="80"><template #default="{ row }"><el-badge is-dot :hidden="!row.unread"><el-tag :type="row.unread ? 'danger' : 'info'">{{ row.unread ? '未读' : '已读' }}</el-tag></el-badge></template></el-table-column>
-        <el-table-column prop="category" label="分类" width="110" />
-        <el-table-column prop="title" label="标题" min-width="150" />
-        <el-table-column prop="content" label="内容" min-width="260" />
-        <el-table-column prop="time" label="触发时间" min-width="150" />
+      <el-table :data="filtered" border :row-class-name="({ row }) => row.Category === '告警通知' ? 'danger-row' : ''">
+        <el-table-column label="状态" width="80"><template #default="{ row }"><el-badge is-dot :hidden="!row.IsUnread"><el-tag :type="row.IsUnread ? 'danger' : 'info'">{{ row.IsUnread ? '未读' : '已读' }}</el-tag></el-badge></template></el-table-column>
+        <el-table-column prop="Category" label="分类" width="110" />
+        <el-table-column prop="Title" label="标题" min-width="150" />
+        <el-table-column prop="Content" label="内容" min-width="260" />
+        <el-table-column prop="MessageTime" label="触发时间" min-width="150" />
         <el-table-column label="操作" width="190">
           <template #default="{ row }">
-            <el-button link type="primary" @click="detail = row; row.unread = false">详情</el-button>
-            <el-button link type="success" @click="router.push(row.link)">跳转</el-button>
+            <el-button link type="primary" @click="detail = row; row.IsUnread = false">详情</el-button>
+            <el-button link type="success" @click="router.push(row.LinkUrl)">跳转</el-button>
             <el-button link type="danger" @click="remove(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -57,13 +57,13 @@ async function remove(item) {
 
     <el-dialog v-model="detail" title="消息详情" width="520px">
       <template v-if="detail">
-        <h3>{{ detail.title }}</h3>
-        <p style="margin-top: 12px; line-height: 1.8">{{ detail.content }}</p>
-        <p class="muted" style="margin-top: 12px">{{ detail.time }}</p>
+        <h3>{{ detail.Title }}</h3>
+        <p style="margin-top: 12px; line-height: 1.8">{{ detail.Content }}</p>
+        <p class="muted" style="margin-top: 12px">{{ detail.MessageTime }}</p>
       </template>
       <template #footer>
         <el-button @click="detail = null">关闭</el-button>
-        <el-button type="primary" @click="router.push(detail.link)">前往业务页面</el-button>
+        <el-button type="primary" @click="router.push(detail.LinkUrl)">前往业务页面</el-button>
       </template>
     </el-dialog>
   </div>

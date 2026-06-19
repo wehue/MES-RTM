@@ -5,26 +5,32 @@ import MetricCard from '@/components/MetricCard.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { DEVICE_STATUS, DEVICE_TYPES, statusMeta } from '@/utils/constants'
-import { devices, lineOptions } from '@/utils/mockData'
+import { devices, getEquipmentRuntime, getEquipmentTypeName, lineOptions, lines } from '@/utils/mockData'
 
 const viewMode = ref('table')
-const filters = reactive({ type: '', status: '', line: '' })
-const query = reactive({ type: '', status: '', line: '' })
+const filters = reactive({ EquipmentTypeName: '', Status: '', LineCode: '' })
+const query = reactive({ EquipmentTypeName: '', Status: '', LineCode: '' })
+
+function getLineCode(device) {
+  return lines.find((line) => line.Id === device.LineId)?.LineCode || '-'
+}
 
 const filteredDevices = computed(() => devices.filter((item) => {
-  const type = !query.type || item.type === query.type
-  const status = !query.status || item.status === query.status
-  const line = !query.line || item.line === query.line
+  const type = !query.EquipmentTypeName || getEquipmentTypeName(item.EquipmentTypeId) === query.EquipmentTypeName
+  const status = !query.Status || item.Status === Number(query.Status)
+  const line = !query.LineCode || getLineCode(item) === query.LineCode
   return type && status && line
 }))
 
 const counts = computed(() => ({
   total: devices.length,
-  running: devices.filter((item) => item.status === 'running').length,
-  standby: devices.filter((item) => item.status === 'standby').length,
-  fault: devices.filter((item) => item.status === 'fault').length,
-  offline: devices.filter((item) => item.status === 'offline').length,
+  running: devices.filter((item) => item.Status === 1).length,
+  standby: devices.filter((item) => item.Status === 2).length,
+  fault: devices.filter((item) => item.Status === 3).length,
+  offline: devices.filter((item) => item.Status === 5).length,
 }))
+
+const deviceStatusCodes = [1, 2, 3, 4, 5, 6]
 
 function handleSearch() {
   Object.assign(query, { ...filters })
@@ -32,8 +38,8 @@ function handleSearch() {
 }
 
 function handleReset() {
-  Object.assign(filters, { type: '', status: '', line: '' })
-  Object.assign(query, { type: '', status: '', line: '' })
+  Object.assign(filters, { EquipmentTypeName: '', Status: '', LineCode: '' })
+  Object.assign(query, { EquipmentTypeName: '', Status: '', LineCode: '' })
   ElMessage.info('筛选条件已重置')
 }
 </script>
@@ -43,7 +49,7 @@ function handleReset() {
     <div class="page-header">
       <div>
         <h1 class="page-title">设备状态监控</h1>
-        <p class="page-subtitle">按设备类型、状态、产线筛选，故障与 OEE 低于目标值自动预警。</p>
+        <p class="page-subtitle">设备基础字段来自 smt_equipment，当前批次、OEE、产量等为运行状态统计数据。</p>
       </div>
       <el-segmented v-model="viewMode" :options="[{ label: '列表视图', value: 'table' }, { label: '矩阵视图', value: 'matrix' }]" />
     </div>
@@ -59,17 +65,17 @@ function handleReset() {
     <div class="filter-bar">
       <el-form :inline="true" :model="filters">
         <el-form-item label="设备类型">
-          <el-select v-model="filters.type" clearable placeholder="全部类型" style="width: 170px">
+          <el-select v-model="filters.EquipmentTypeName" clearable placeholder="全部类型" style="width: 170px">
             <el-option v-for="type in DEVICE_TYPES" :key="type" :label="type" :value="type" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 130px">
-            <el-option v-for="(meta, key) in DEVICE_STATUS" :key="key" :label="meta.label" :value="key" />
+          <el-select v-model="filters.Status" clearable placeholder="全部状态" style="width: 130px">
+            <el-option v-for="code in deviceStatusCodes" :key="code" :label="DEVICE_STATUS[code].label" :value="code" />
           </el-select>
         </el-form-item>
         <el-form-item label="产线">
-          <el-select v-model="filters.line" clearable placeholder="全部产线" style="width: 130px">
+          <el-select v-model="filters.LineCode" clearable placeholder="全部产线" style="width: 130px">
             <el-option v-for="line in lineOptions" :key="line" :label="line" :value="line" />
           </el-select>
         </el-form-item>
@@ -83,18 +89,34 @@ function handleReset() {
     </div>
 
     <SectionCard title="设备列表 / 矩阵">
-      <el-table v-if="viewMode === 'table'" :data="filteredDevices" border :row-class-name="({ row }) => row.status === 'fault' ? 'danger-row' : row.oee < 70 ? 'warning-row' : ''">
-        <el-table-column prop="id" label="设备编号" width="190" />
-        <el-table-column prop="name" label="设备名称" width="190" />
-        <el-table-column prop="type" label="设备类型" width="190" />
-        <el-table-column prop="line" label="所属产线" width="150" />
-        <el-table-column label="状态" width="140"><template #default="{ row }"><StatusTag :meta="statusMeta(DEVICE_STATUS, row.status)" /></template></el-table-column>
-        <el-table-column prop="batch" label="当前批次" width="240" />
-        <el-table-column prop="duration" label="运行时长" width="160" />
-        <el-table-column prop="oee" label="OEE%" width="130" />
-        <el-table-column prop="output" label="当日产量" width="150" />
-        <el-table-column prop="throwRate" label="抛料率" width="140" />
-        <el-table-column prop="fault" label="故障描述" width="260" />
+      <el-table v-if="viewMode === 'table'" :data="filteredDevices" border :row-class-name="({ row }) => row.Status === 3 ? 'danger-row' : getEquipmentRuntime(row).Oee < 70 ? 'warning-row' : ''">
+        <el-table-column prop="EquipmentCode" label="设备编码" width="190" />
+        <el-table-column prop="EquipmentName" label="设备名称" width="190" />
+        <el-table-column label="设备类型" width="190">
+          <template #default="{ row }">{{ getEquipmentTypeName(row.EquipmentTypeId) }}</template>
+        </el-table-column>
+        <el-table-column label="所属产线" width="150">
+          <template #default="{ row }">{{ getLineCode(row) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="140"><template #default="{ row }"><StatusTag :meta="statusMeta(DEVICE_STATUS, row.Status)" /></template></el-table-column>
+        <el-table-column label="当前批次" width="240">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).CurrentLotCode }}</template>
+        </el-table-column>
+        <el-table-column label="运行时长" width="160">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).RunDuration }}</template>
+        </el-table-column>
+        <el-table-column label="OEE%" width="130">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).Oee }}</template>
+        </el-table-column>
+        <el-table-column label="当日产量" width="150">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).DailyOutput }}</template>
+        </el-table-column>
+        <el-table-column label="抛料率" width="140">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).ThrowRate }}</template>
+        </el-table-column>
+        <el-table-column label="故障描述" width="260">
+          <template #default="{ row }">{{ getEquipmentRuntime(row).FaultDescription }}</template>
+        </el-table-column>
         <el-table-column fixed="right" label="操作" width="220">
           <template #default>
             <div class="row-actions">
@@ -106,11 +128,11 @@ function handleReset() {
       </el-table>
 
       <div v-else class="device-matrix">
-        <div v-for="device in filteredDevices" :key="device.id" class="device-tile" :style="{ borderColor: statusMeta(DEVICE_STATUS, device.status).color }">
-          <strong>{{ device.id }}</strong>
-          <span>{{ device.name }}</span>
-          <StatusTag :meta="statusMeta(DEVICE_STATUS, device.status)" />
-          <small>OEE {{ device.oee }}% / {{ device.batch }}</small>
+        <div v-for="device in filteredDevices" :key="device.Id" class="device-tile" :style="{ borderColor: statusMeta(DEVICE_STATUS, device.Status).color }">
+          <strong>{{ device.EquipmentCode }}</strong>
+          <span>{{ device.EquipmentName }}</span>
+          <StatusTag :meta="statusMeta(DEVICE_STATUS, device.Status)" />
+          <small>OEE {{ getEquipmentRuntime(device).Oee }}% / {{ getEquipmentRuntime(device).CurrentLotCode }}</small>
         </div>
       </div>
     </SectionCard>

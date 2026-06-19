@@ -3,28 +3,49 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import MetricCard from '@/components/MetricCard.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import { repairTasks, submitRepairResult } from '@/utils/mockData'
+import {
+  REPAIR_STATUS_CODE,
+  findBatch,
+  findUser,
+  findOperation,
+  findRouteStep,
+  getBatchLine,
+  getBatchProduct,
+  getUserOptionLabel,
+  repairTasks,
+  submitRepairResult,
+  users,
+} from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const selected = ref(repairTasks[0] || null)
 const form = reactive({
-  result: 'repair_pass',
-  repairQty: selected.value?.badQty || 0,
-  scrapQty: 0,
-  reason: '',
-  prevention: '',
-  handler: userStore.userInfo.name || '质量工程师',
+  RepairResult: 1,
+  RepairedQuantity: selected.value?.RepairQuantity || 0,
+  ScrapQuantity: 0,
+  RepairDescription: '',
+  Prevention: '',
+  RepairBy: findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 4,
 })
 const canManageRepair = computed(() => userStore.hasAnyRole(['quality_engineer']))
 
+function getRepairBatch(task) {
+  return findBatch(task?.LotId)
+}
+
+function getRepairOperation(task) {
+  const step = findRouteStep(task?.RouteStepId)
+  return findOperation(step?.OperationId)
+}
+
 watch(selected, (task) => {
   if (!task) return
-  form.result = 'repair_pass'
-  form.repairQty = task.badQty || 0
-  form.scrapQty = 0
-  form.reason = ''
-  form.prevention = ''
+  form.RepairResult = 1
+  form.RepairedQuantity = task.RepairQuantity || 0
+  form.ScrapQuantity = 0
+  form.RepairDescription = task.RepairDescription || ''
+  form.Prevention = ''
 })
 
 function submitRepair() {
@@ -36,17 +57,20 @@ function submitRepair() {
     ElMessage.error('当前角色只能查看维修记录，质量工程师可提交维修处理结果')
     return
   }
-  const result = submitRepairResult(selected.value.batchId, {
-    result: form.result,
-    repairQty: form.repairQty,
-    scrapQty: form.scrapQty,
-    completedAt: '2026-05-20 15:20',
+  const batch = getRepairBatch(selected.value)
+  const result = submitRepairResult(batch.LotCode, {
+    RepairResult: form.RepairResult,
+    result: form.RepairResult === 1 ? 'repair_pass' : 'close',
+    RepairedQuantity: form.RepairedQuantity,
+    ScrapQuantity: form.ScrapQuantity,
+    RepairBy: Number(form.RepairBy),
+    RepairEndTime: '2026-05-20 15:20',
   })
   if (!result.ok) {
     ElMessage.error(result.message)
     return
   }
-  ElMessage.success(form.result === 'repair_pass' ? '维修完成，批次已返回待进站。' : '维修结束，批次已关闭。')
+  ElMessage.success(form.RepairResult === 1 ? '维修完成，批次已返回待进站。' : '维修结束，批次已关闭。')
 }
 </script>
 
@@ -55,24 +79,32 @@ function submitRepair() {
     <div class="page-header">
       <div>
         <h1 class="page-title">维修管理</h1>
-        <p class="page-subtitle">质量工程师承接出站生成的维修任务，完成处理后让批次回流或关闭。</p>
+        <p class="page-subtitle">维修任务按 smt_repair_records 字段展示和提交，批次、产品、产线通过关联查询获得。</p>
       </div>
     </div>
 
     <div class="stat-cards">
-      <MetricCard title="待维修任务" :value="repairTasks.filter((item) => item.status !== '已完成').length" unit="批" tone="danger" />
-      <MetricCard title="已完成维修" :value="repairTasks.filter((item) => item.status === '已完成').length" unit="批" tone="success" />
+      <MetricCard title="待维修任务" :value="repairTasks.filter((item) => item.Status !== REPAIR_STATUS_CODE.completed).length" unit="批" tone="danger" />
+      <MetricCard title="已完成维修" :value="repairTasks.filter((item) => item.Status === REPAIR_STATUS_CODE.completed).length" unit="批" tone="success" />
     </div>
 
     <div class="content-grid">
       <SectionCard class="span-12" title="维修任务列表">
         <el-table :data="repairTasks" border highlight-current-row @current-change="selected = $event">
-          <el-table-column prop="batchId" label="批次号" min-width="160" />
-          <el-table-column prop="productModel" label="产品型号" />
-          <el-table-column prop="line" label="产线" />
-          <el-table-column prop="process" label="工序" />
-          <el-table-column prop="badQty" label="不良数量" />
-          <el-table-column prop="status" label="状态" />
+          <el-table-column label="批次号" min-width="160">
+            <template #default="{ row }">{{ getRepairBatch(row)?.LotCode || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="产品型号">
+            <template #default="{ row }">{{ getBatchProduct(getRepairBatch(row))?.Model || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="产线">
+            <template #default="{ row }">{{ getBatchLine(getRepairBatch(row))?.LineCode || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="工序">
+            <template #default="{ row }">{{ getRepairOperation(row)?.OperationName || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="RepairQuantity" label="送修数量" />
+          <el-table-column prop="Status" label="状态" />
         </el-table>
       </SectionCard>
 
@@ -80,22 +112,26 @@ function submitRepair() {
         <el-empty v-if="!selected" description="暂无维修任务" />
         <template v-else>
           <el-descriptions :column="1" border>
-            <el-descriptions-item label="当前批次">{{ selected.batchId }}</el-descriptions-item>
-            <el-descriptions-item label="工序">{{ selected.process }}</el-descriptions-item>
-            <el-descriptions-item label="不良数量">{{ selected.badQty }}</el-descriptions-item>
+            <el-descriptions-item label="当前批次">{{ getRepairBatch(selected)?.LotCode }}</el-descriptions-item>
+            <el-descriptions-item label="工序">{{ getRepairOperation(selected)?.OperationName }}</el-descriptions-item>
+            <el-descriptions-item label="送修数量">{{ selected.RepairQuantity }}</el-descriptions-item>
           </el-descriptions>
-          <el-form :model="form" label-width="100px" class="repair-form">
+          <el-form :model="form" label-width="110px" class="repair-form">
             <el-form-item label="处理结果">
-              <el-select v-model="form.result" class="full">
-                <el-option label="维修合格回流" value="repair_pass" />
-                <el-option label="转报废关闭" value="close" />
+              <el-select v-model="form.RepairResult" class="full">
+                <el-option label="维修合格回流" :value="1" />
+                <el-option label="转报废关闭" :value="2" />
               </el-select>
             </el-form-item>
-            <el-form-item label="维修数量"><el-input-number v-model="form.repairQty" :min="0" /></el-form-item>
-            <el-form-item label="报废数量"><el-input-number v-model="form.scrapQty" :min="0" /></el-form-item>
-            <el-form-item label="处理人"><el-input v-model="form.handler" /></el-form-item>
-            <el-form-item label="原因分析"><el-input v-model="form.reason" type="textarea" /></el-form-item>
-            <el-form-item label="预防措施"><el-input v-model="form.prevention" type="textarea" /></el-form-item>
+            <el-form-item label="维修数量"><el-input-number v-model="form.RepairedQuantity" :min="0" /></el-form-item>
+            <el-form-item label="报废数量"><el-input-number v-model="form.ScrapQuantity" :min="0" /></el-form-item>
+            <el-form-item label="维修人">
+              <el-select v-model="form.RepairBy" filterable placeholder="请选择维修人" class="full">
+                <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="原因分析"><el-input v-model="form.RepairDescription" type="textarea" /></el-form-item>
+            <el-form-item label="预防措施"><el-input v-model="form.Prevention" type="textarea" /></el-form-item>
           </el-form>
           <div class="table-actions">
             <el-button type="primary" :disabled="!canManageRepair" @click="submitRepair">提交维修结果</el-button>

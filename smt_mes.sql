@@ -751,7 +751,6 @@ CREATE TABLE smt_roles (
     RoleCode              VARCHAR(50)     NOT NULL                 COMMENT '角色编码（英文，业务唯一，如 OPERATOR, ENGINEER, ADMIN）',
     RoleName              VARCHAR(50)     NOT NULL                 COMMENT '角色名称（中文，如"操作工""工艺工程师"）',
     Description           VARCHAR(200)    NULL                     COMMENT '角色说明，描述该角色拥有的权限范围',
-		Subsystem             TINYINT         NOT NULL                 COMMENT '所属子系统: 1-MDM, 2-RTM',
     -- 通用字段
     CreatedAt             DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
     CreatedBy             VARCHAR(50)     NOT NULL                 COMMENT '创建人（系统管理员）',
@@ -785,6 +784,7 @@ CREATE TABLE smt_functions (
     -- 业务字段
     FunctionCode          VARCHAR(100)    NOT NULL                 COMMENT '功能编码（英文，全局唯一，如 equipment, route, user）',
     FunctionName          VARCHAR(100)    NOT NULL                 COMMENT '功能名称（中文，用于界面显示，如"设备管理""工艺管理"）',
+    Subsystem             TINYINT         NOT NULL                 COMMENT '所属子系统: 1-MDM, 2-RTM',
     Description           VARCHAR(200)    NULL                     COMMENT '功能描述',
 
     -- 通用字段

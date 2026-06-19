@@ -1,10 +1,22 @@
 import { reactive } from 'vue'
 
 const NOW = '2026-05-20 14:30'
+const SYSTEM_USER_ID = 1
+
+function auditFields(createdAt = '2026-05-20 08:00', remark = '') {
+  return {
+    CreatedAt: createdAt,
+    CreatedBy: SYSTEM_USER_ID,
+    UpdatedAt: createdAt,
+    UpdatedBy: SYSTEM_USER_ID,
+    IsDeleted: 0,
+    LastOperationType: 'INIT',
+    LastOperationRemark: remark,
+  }
+}
 
 export const WORK_ORDER_STATUS_CODE = {
   draft: 1,
-  pending: 2,
   released: 2,
   running: 3,
   paused: 4,
@@ -42,53 +54,205 @@ export const VERIFY_STATUS_CODE = {
   failed: 2,
 }
 
-export const lineOptions = ['SMT-A1']
+export const REPAIR_STATUS_CODE = {
+  pending: 0,
+  repairing: 1,
+  completed: 2,
+}
 
-export const products = [
+export const WORK_ORDER_STATUS_KEY = {
+  1: 'draft',
+  2: 'released',
+  3: 'running',
+  4: 'paused',
+  5: 'completed',
+  6: 'closed',
+}
+
+export const BATCH_STATUS_KEY = {
+  1: 'pending',
+  2: 'running',
+  3: 'paused',
+  4: 'repair',
+  5: 'locked',
+  6: 'completed',
+}
+
+export const PROCESS_STATUS_KEY = {
+  1: 'wait_in',
+  2: 'checked_in',
+  3: 'checked_out',
+  4: 'paused',
+  5: 'locked',
+  6: 'skipped',
+}
+
+export const DEVICE_STATUS_KEY = {
+  1: 'running',
+  2: 'standby',
+  3: 'fault',
+  4: 'maintenance',
+  5: 'offline',
+  6: 'scrapped',
+}
+
+function getStatusCode(map, status) {
+  return typeof status === 'number' ? status : map[status]
+}
+
+export const users = reactive([
+  { Id: 1, Username: 'admin', PasswordHash: '-', FullName: '系统管理员', Department: '信息部', Position: '工厂管理层', Contact: 'admin@factory.local', ...auditFields() },
+  { Id: 2, Username: 'pm01', PasswordHash: '-', FullName: '王主管', Department: '生产部', Position: '生产主管', Contact: 'pm01@factory.local', ...auditFields() },
+  { Id: 3, Username: 'op01', PasswordHash: '-', FullName: '张工', Department: '生产一车间', Position: '操作工', Contact: 'op01@factory.local', ...auditFields() },
+  { Id: 4, Username: 'qe01', PasswordHash: '-', FullName: '质量工程师', Department: '质量部', Position: '质量工程师', Contact: 'qe01@factory.local', ...auditFields() },
+])
+
+export const roles = reactive([
+  { Id: 1, RoleCode: 'production_manager', RoleName: '生产主管', Description: '负责工单、批次计划与调度', ...auditFields() },
+  { Id: 2, RoleCode: 'team_leader', RoleName: '班组长', Description: '负责执行协调、进出站与设备查看', ...auditFields() },
+  { Id: 3, RoleCode: 'operator', RoleName: '操作工', Description: '负责上料、进站、出站与追溯查看', ...auditFields() },
+  { Id: 4, RoleCode: 'quality_engineer', RoleName: '质量工程师', Description: '负责质量异常和维修处理', ...auditFields() },
+  { Id: 5, RoleCode: 'admin', RoleName: '工厂管理层', Description: '系统全权限', ...auditFields() },
+])
+
+export const functions = reactive([
+  { Id: 1, FunctionCode: 'dashboard', FunctionName: '生产驾驶舱', Subsystem: 'MES-RTM', Description: '首页总览', ...auditFields() },
+  { Id: 2, FunctionCode: 'work_order', FunctionName: '工单管理', Subsystem: 'MES-RTM', Description: '工单创建与释放', ...auditFields() },
+  { Id: 3, FunctionCode: 'batch', FunctionName: '批次管理', Subsystem: 'MES-RTM', Description: '批次拆分与投产', ...auditFields() },
+  { Id: 4, FunctionCode: 'loading', FunctionName: '上料管理', Subsystem: 'MES-RTM', Description: 'BOM 齐套校验和上料记录', ...auditFields() },
+  { Id: 5, FunctionCode: 'check_in', FunctionName: '进站操作', Subsystem: 'MES-RTM', Description: '批次进站', ...auditFields() },
+  { Id: 6, FunctionCode: 'check_out', FunctionName: '出站操作', Subsystem: 'MES-RTM', Description: '批次出站', ...auditFields() },
+  { Id: 7, FunctionCode: 'repair', FunctionName: '维修管理', Subsystem: 'MES-RTM', Description: '维修处理', ...auditFields() },
+])
+
+export const equipmentTypes = reactive([
+  { Id: 1, EquipmentTypeCode: 'PRT', EquipmentTypeName: '印刷机', Description: '锡膏印刷', ...auditFields() },
+  { Id: 2, EquipmentTypeCode: 'SPI', EquipmentTypeName: 'SPI 检测仪', Description: '锡膏检测', ...auditFields() },
+  { Id: 3, EquipmentTypeCode: 'MNT', EquipmentTypeName: '贴片机', Description: '贴装', ...auditFields() },
+  { Id: 4, EquipmentTypeCode: 'RFL', EquipmentTypeName: '回流炉', Description: '回流焊接', ...auditFields() },
+  { Id: 5, EquipmentTypeCode: 'AOI', EquipmentTypeName: 'AOI 检测仪', Description: '外观检测', ...auditFields() },
+])
+
+export const lines = reactive([
+  {
+    Id: 1,
+    LineCode: 'SMT-A1',
+    LineName: 'SMT-A1 标准线',
+    LineDescription: '工业控制主板 SMT 标准产线',
+    Workshop: '一车间',
+    ...auditFields(),
+  },
+])
+
+export const lineOptions = lines.map((line) => line.LineCode)
+
+export const equipment = reactive([
+  { Id: 1, EquipmentCode: 'PRT-A1-01', EquipmentName: 'A1 印刷机', EquipmentTypeId: 1, Model: 'DEK-Horizon', Brand: 'DEK', SerialNumber: 'PRT202605001', ProductionDate: '2025-01-10', WarrantyExpireDate: '2028-01-09', LineId: 1, Status: 1, ...auditFields() },
+  { Id: 2, EquipmentCode: 'SPI-A1-01', EquipmentName: 'A1 SPI', EquipmentTypeId: 2, Model: 'SPI-880', Brand: 'KohYoung', SerialNumber: 'SPI202605001', ProductionDate: '2025-01-12', WarrantyExpireDate: '2028-01-11', LineId: 1, Status: 1, ...auditFields() },
+  { Id: 3, EquipmentCode: 'MNT-A1-01', EquipmentName: 'A1 贴片机', EquipmentTypeId: 3, Model: 'NPM-W2', Brand: 'Panasonic', SerialNumber: 'MNT202605001', ProductionDate: '2025-01-15', WarrantyExpireDate: '2028-01-14', LineId: 1, Status: 2, ...auditFields() },
+  { Id: 4, EquipmentCode: 'RFL-A1-01', EquipmentName: 'A1 回流炉', EquipmentTypeId: 4, Model: 'HELLER-1809', Brand: 'Heller', SerialNumber: 'RFL202605001', ProductionDate: '2025-01-20', WarrantyExpireDate: '2028-01-19', LineId: 1, Status: 1, ...auditFields() },
+  { Id: 5, EquipmentCode: 'AOI-A1-01', EquipmentName: 'A1 AOI', EquipmentTypeId: 5, Model: 'AOI-900', Brand: 'TRI', SerialNumber: 'AOI202605001', ProductionDate: '2025-01-22', WarrantyExpireDate: '2028-01-21', LineId: 1, Status: 1, ...auditFields() },
+])
+
+export const devices = equipment
+
+export const equipmentRuntimeState = reactive({
+  'PRT-A1-01': { CurrentLotCode: 'B20260512001-01', RunDuration: '5h 12m', Oee: 88, DailyOutput: 1120, ThrowRate: '-', FaultDescription: '-' },
+  'SPI-A1-01': { CurrentLotCode: 'B20260512001-01', RunDuration: '4h 50m', Oee: 86, DailyOutput: 1116, ThrowRate: '-', FaultDescription: '-' },
+  'MNT-A1-01': { CurrentLotCode: '-', RunDuration: '-', Oee: 82, DailyOutput: 1100, ThrowRate: '0.18%', FaultDescription: '-' },
+  'RFL-A1-01': { CurrentLotCode: 'B20260512001-01', RunDuration: '3h 40m', Oee: 84, DailyOutput: 1088, ThrowRate: '-', FaultDescription: '-' },
+  'AOI-A1-01': { CurrentLotCode: 'B20260512001-01', RunDuration: '2h 10m', Oee: 87, DailyOutput: 528, ThrowRate: '-', FaultDescription: '-' },
+})
+
+export const productTypes = reactive([
+  { Id: 1, ProductTypeCode: 'PCBA', ProductTypeName: 'PCBA 板卡', Description: 'SMT PCBA 产品', ...auditFields() },
+])
+
+export const products = reactive([
   {
     Id: 1,
     ProductCode: 'PCBA-RTM-100',
     ProductName: '工业控制主板',
     Model: 'PCBA-RTM-100',
     Version: 'V1.0',
+    PCBDimensions: '120mm x 80mm',
+    PCBThickness: 1.6,
+    PanelCount: 1,
     ProductTypeId: 1,
     SpiThreshold: 97,
     AoiThreshold: 96,
     DefaultRouteId: 1,
-    model: 'PCBA-RTM-100',
-    name: '工业控制主板',
+    ...auditFields(),
   },
-]
+])
 
-export const processRoutes = [
+export const routes = reactive([
   {
     Id: 1,
     RouteCode: 'ROUTE-SMT-STD',
     RouteName: '标准 SMT 工艺路线',
     ProductTypeId: 1,
+    Description: '印刷-SPI-贴片-回流焊接-AOI 标准流程',
     Status: 2,
-    id: 'ROUTE-SMT-STD',
-    productModel: 'PCBA-RTM-100',
-    name: '标准 SMT 工艺路线',
-    line: 'SMT-A1',
-    steps: [
-      { Id: 101, RouteId: 1, OperationId: 1, OperationName: '印刷', Sequence: 10, EquipmentTypeName: '印刷机', StandardTime: 480, step: '印刷', device: '印刷机', standardTime: '8 分钟' },
-      { Id: 102, RouteId: 1, OperationId: 2, OperationName: 'SPI 检测', Sequence: 20, EquipmentTypeName: 'SPI 检测仪', StandardTime: 300, step: 'SPI 检测', device: 'SPI 检测仪', standardTime: '5 分钟' },
-      { Id: 103, RouteId: 1, OperationId: 3, OperationName: '贴片', Sequence: 30, EquipmentTypeName: '贴片机', StandardTime: 1440, step: '贴片', device: '贴片机', standardTime: '24 分钟' },
-      { Id: 104, RouteId: 1, OperationId: 4, OperationName: '回流焊接', Sequence: 40, EquipmentTypeName: '回流炉', StandardTime: 1080, step: '回流焊接', device: '回流炉', standardTime: '18 分钟' },
-      { Id: 105, RouteId: 1, OperationId: 5, OperationName: 'AOI 检测', Sequence: 50, EquipmentTypeName: 'AOI 检测仪', StandardTime: 420, step: 'AOI 检测', device: 'AOI 检测仪', standardTime: '7 分钟' },
-    ],
+    ...auditFields(),
   },
-]
+])
 
-export function routeOptionsByProduct(productModel) {
-  if (!productModel) return []
-  return processRoutes.filter((route) => route.productModel === productModel)
-}
+export const processRoutes = routes
 
-export function routeById(routeId) {
-  return processRoutes.find((route) => route.id === routeId) || processRoutes[0]
-}
+export const operations = reactive([
+  { Id: 1, OperationCode: 'PRINT', OperationName: '印刷', Description: '锡膏印刷', ...auditFields() },
+  { Id: 2, OperationCode: 'SPI', OperationName: 'SPI 检测', Description: '锡膏检测', ...auditFields() },
+  { Id: 3, OperationCode: 'MOUNT', OperationName: '贴片', Description: '元件贴装', ...auditFields() },
+  { Id: 4, OperationCode: 'REFLOW', OperationName: '回流焊接', Description: '回流焊接', ...auditFields() },
+  { Id: 5, OperationCode: 'AOI', OperationName: 'AOI 检测', Description: 'AOI 外观检测', ...auditFields() },
+])
+
+export const routeSteps = reactive([
+  { Id: 101, RouteId: 1, OperationId: 1, Sequence: 10, EquipmentTypeId: 1, ParameterTemplateId: null, StandardTime: 480, ...auditFields() },
+  { Id: 102, RouteId: 1, OperationId: 2, Sequence: 20, EquipmentTypeId: 2, ParameterTemplateId: null, StandardTime: 300, ...auditFields() },
+  { Id: 103, RouteId: 1, OperationId: 3, Sequence: 30, EquipmentTypeId: 3, ParameterTemplateId: null, StandardTime: 1440, ...auditFields() },
+  { Id: 104, RouteId: 1, OperationId: 4, Sequence: 40, EquipmentTypeId: 4, ParameterTemplateId: null, StandardTime: 1080, ...auditFields() },
+  { Id: 105, RouteId: 1, OperationId: 5, Sequence: 50, EquipmentTypeId: 5, ParameterTemplateId: null, StandardTime: 420, ...auditFields() },
+])
+
+export const boms = reactive([
+  {
+    Id: 1,
+    ProductId: 1,
+    BomVersion: 'V1.0',
+    IsActive: 1,
+    Description: '工业控制主板标准 BOM',
+    ActiveProductKey: 'PCBA-RTM-100:V1.0',
+    ...auditFields(),
+  },
+])
+
+export const materialTypes = reactive([
+  { Id: 1, MaterialTypeCode: 'RES', MaterialTypeName: '电阻', Description: '贴片电阻', ...auditFields() },
+  { Id: 2, MaterialTypeCode: 'CAP', MaterialTypeName: '电容', Description: '贴片电容', ...auditFields() },
+  { Id: 3, MaterialTypeCode: 'IC', MaterialTypeName: 'IC', Description: '集成电路', ...auditFields() },
+  { Id: 4, MaterialTypeCode: 'LED', MaterialTypeName: 'LED', Description: '发光二极管', ...auditFields() },
+])
+
+export const materials = reactive([
+  { Id: 1, MaterialCode: 'R0603-10K', MaterialDesc: '0603 10K 1% 电阻', MaterialTypeId: 1, PackageType: '0603', Brand: 'Yageo', MinPackQty: 3000, StorageCondition: '常温防潮', MSDLevel: '1', MaterialBarcode: 'R0603-10K#LOT20260520-01', ...auditFields() },
+  { Id: 2, MaterialCode: 'C0402-10uF', MaterialDesc: '0402 10uF 16V 电容', MaterialTypeId: 2, PackageType: '0402', Brand: 'Murata', MinPackQty: 2000, StorageCondition: '常温防潮', MSDLevel: '1', MaterialBarcode: 'C0402-10uF#LOT20260520-01', ...auditFields() },
+  { Id: 3, MaterialCode: 'C0402-10uF-B', MaterialDesc: '0402 10uF 16V 电容替代料', MaterialTypeId: 2, PackageType: '0402', Brand: 'Samsung', MinPackQty: 2000, StorageCondition: '常温防潮', MSDLevel: '1', MaterialBarcode: 'C0402-10uF-B#LOT20260520-01', ...auditFields() },
+  { Id: 4, MaterialCode: 'U-QFN32-MCU', MaterialDesc: 'QFN32 MCU', MaterialTypeId: 3, PackageType: 'QFN32', Brand: 'ST', MinPackQty: 600, StorageCondition: 'MSD 管控', MSDLevel: '3', MaterialBarcode: 'U-QFN32-MCU#LOT20260520-01', ...auditFields() },
+  { Id: 5, MaterialCode: 'LED0603-G', MaterialDesc: '0603 Green LED', MaterialTypeId: 4, PackageType: '0603', Brand: 'Everlight', MinPackQty: 1200, StorageCondition: '常温防潮', MSDLevel: '1', MaterialBarcode: 'LED0603-G#LOT20260520-01', ...auditFields() },
+])
+
+export const materialSubstitutes = reactive([
+  { Id: 1, MaterialId: 2, SubstituteMaterialId: 3, Direction: 1, Priority: 1, ...auditFields() },
+])
+
+export const bomItems = reactive([
+  { Id: 1, BomId: 1, MaterialId: 1, ReferenceDesignator: 'R1,R2,R3', Quantity: 3, PackageType: '0603', ...auditFields() },
+  { Id: 2, BomId: 1, MaterialId: 2, ReferenceDesignator: 'C1,C4', Quantity: 2, PackageType: '0402', ...auditFields() },
+  { Id: 3, BomId: 1, MaterialId: 4, ReferenceDesignator: 'U1', Quantity: 1, PackageType: 'QFN32', ...auditFields() },
+  { Id: 4, BomId: 1, MaterialId: 5, ReferenceDesignator: 'D1,D2', Quantity: 2, PackageType: '0603', ...auditFields() },
+])
 
 export const workOrders = reactive([
   {
@@ -99,22 +263,7 @@ export const workOrders = reactive([
     PlannedQuantity: 1800,
     DueDate: '2026-05-20 23:59',
     Status: WORK_ORDER_STATUS_CODE.running,
-    id: 'WO20260512001',
-    productModel: 'PCBA-RTM-100',
-    productName: '工业控制主板',
-    planned: 1800,
-    completed: 1120,
-    dueDate: '2026-05-20',
-    line: 'SMT-A1',
-    routeId: 'ROUTE-SMT-STD',
-    routeName: '标准 SMT 工艺路线',
-    releasedBatches: 3,
-    completedBatches: 1,
-    status: 'running',
-    creator: '王主管',
-    createdAt: '2026-05-20 08:00',
-    releasedAt: '2026-05-20 08:20',
-    closedAt: '-',
+    ...auditFields('2026-05-20 08:00', '工单已释放并进入生产'),
   },
 ])
 
@@ -130,22 +279,7 @@ export const batches = reactive([
     EstimatedCompletionTime: '2026-05-20 18:00',
     StartTime: null,
     EndTime: null,
-    id: 'B20260512005-01',
-    workOrderId: 'WO20260512001',
-    productModel: 'PCBA-RTM-100',
-    productName: '工业控制主板',
-    line: 'SMT-A1',
-    planned: 600,
-    completed: 0,
-    defective: 0,
-    scrap: 0,
-    currentStep: '-',
-    eta: '2026-05-20 18:00',
-    onlineAt: '-',
-    status: 'pending',
-    lockReason: '-',
-    owner: '张工',
-    autoLocked: false,
+    ...auditFields('2026-05-20 14:20', '批次创建'),
   },
   {
     Id: 2,
@@ -158,22 +292,7 @@ export const batches = reactive([
     EstimatedCompletionTime: '2026-05-20 16:20',
     StartTime: '2026-05-20 08:42',
     EndTime: null,
-    id: 'B20260512001-01',
-    workOrderId: 'WO20260512001',
-    productModel: 'PCBA-RTM-100',
-    productName: '工业控制主板',
-    line: 'SMT-A1',
-    planned: 600,
-    completed: 520,
-    defective: 7,
-    scrap: 1,
-    currentStep: 'AOI 检测',
-    eta: '2026-05-20 16:20',
-    onlineAt: '2026-05-20 08:42',
-    status: 'running',
-    lockReason: '-',
-    owner: '张工',
-    autoLocked: false,
+    ...auditFields('2026-05-20 08:20', '批次生产中'),
   },
   {
     Id: 3,
@@ -186,274 +305,101 @@ export const batches = reactive([
     EstimatedCompletionTime: '2026-05-20 12:10',
     StartTime: '2026-05-20 06:20',
     EndTime: '2026-05-20 12:10',
-    id: 'B20260512001-02',
-    workOrderId: 'WO20260512001',
-    productModel: 'PCBA-RTM-100',
-    productName: '工业控制主板',
-    line: 'SMT-A1',
-    planned: 600,
-    completed: 600,
-    defective: 0,
-    scrap: 0,
-    currentStep: '已下线',
-    eta: '2026-05-20 12:10',
-    onlineAt: '2026-05-20 06:20',
-    status: 'completed',
-    lockReason: '-',
-    owner: '张工',
-    autoLocked: false,
+    ...auditFields('2026-05-20 06:00', '批次完成'),
   },
 ])
 
-export const lines = reactive([
+export const lotOperationStatus = reactive([
   {
     Id: 1,
-    LineCode: 'SMT-A1',
-    LineName: 'SMT-A1 标准线',
-    Workshop: '一车间',
-    id: 'SMT-A1',
-    name: 'SMT-A1 标准线',
-    workshop: '一车间',
-    workOrder: 'WO20260512001',
-    batch: 'B20260512001-01',
-    productModel: 'PCBA-RTM-100',
-    productName: '工业控制主板',
-    planned: 1800,
-    completed: 1120,
-    status: 'running',
-    devices: ['running', 'running', 'standby', 'running', 'running'],
-    oee: 86.4,
-    dueTime: '18:00',
-    alerts: 0,
+    LotId: 2,
+    RouteStepId: 105,
+    Status: PROCESS_STATUS_CODE.checked_in,
+    StationInTime: '2026-05-20 13:10',
+    StationInQuantity: 528,
+    StationOutTime: null,
+    FinishedQuantity: 520,
+    DefectQuantity: 7,
+    ...auditFields('2026-05-20 13:10', 'AOI 已进站'),
+  },
+  {
+    Id: 2,
+    LotId: 3,
+    RouteStepId: 105,
+    Status: PROCESS_STATUS_CODE.checked_out,
+    StationInTime: '2026-05-20 11:30',
+    StationInQuantity: 600,
+    StationOutTime: '2026-05-20 12:10',
+    FinishedQuantity: 600,
+    DefectQuantity: 0,
+    ...auditFields('2026-05-20 11:30', 'AOI 已出站'),
   },
 ])
 
-export const devices = reactive([
-  { Id: 1, EquipmentCode: 'PRT-A1-01', EquipmentName: 'A1 印刷机', EquipmentTypeId: 1, LineId: 1, Status: 1, id: 'PRT-A1-01', name: 'A1 印刷机', type: '印刷机', line: 'SMT-A1', status: 'running', batch: 'B20260512001-01', duration: '5h 12m', oee: 88, output: 1120, throwRate: '-', fault: '-' },
-  { Id: 2, EquipmentCode: 'SPI-A1-01', EquipmentName: 'A1 SPI', EquipmentTypeId: 2, LineId: 1, Status: 1, id: 'SPI-A1-01', name: 'A1 SPI', type: 'SPI 检测仪', line: 'SMT-A1', status: 'running', batch: 'B20260512001-01', duration: '4h 50m', oee: 86, output: 1116, throwRate: '-', fault: '-' },
-  { Id: 3, EquipmentCode: 'MNT-A1-01', EquipmentName: 'A1 贴片机', EquipmentTypeId: 3, LineId: 1, Status: 2, id: 'MNT-A1-01', name: 'A1 贴片机', type: '贴片机', line: 'SMT-A1', status: 'standby', batch: '-', duration: '-', oee: 82, output: 1100, throwRate: '0.18%', fault: '-' },
-  { Id: 4, EquipmentCode: 'RFL-A1-01', EquipmentName: 'A1 回流炉', EquipmentTypeId: 4, LineId: 1, Status: 1, id: 'RFL-A1-01', name: 'A1 回流炉', type: '回流炉', line: 'SMT-A1', status: 'running', batch: 'B20260512001-01', duration: '3h 40m', oee: 84, output: 1088, throwRate: '-', fault: '-' },
-  { Id: 5, EquipmentCode: 'AOI-A1-01', EquipmentName: 'A1 AOI', EquipmentTypeId: 5, LineId: 1, Status: 1, id: 'AOI-A1-01', name: 'A1 AOI', type: 'AOI 检测仪', line: 'SMT-A1', status: 'running', batch: 'B20260512001-01', duration: '2h 10m', oee: 87, output: 528, throwRate: '-', fault: '-' },
+export const stationInRecords = reactive([
+  {
+    Id: 1,
+    LotId: 2,
+    RouteStepId: 105,
+    Round: 1,
+    EquipmentId: 5,
+    OperatorId: 3,
+    StationInTime: '2026-05-20 13:10',
+    StationInQuantity: 528,
+    Status: 1,
+    VerifyRemark: '',
+    ...auditFields('2026-05-20 13:10', 'AOI 进站'),
+  },
 ])
 
-export const routeSteps = processRoutes[0].steps
+export const stationOutRecords = reactive([])
 
-export const inspectionThresholds = {
-  SPI: 97,
-  AOI: 96,
-}
+export const loadingRecords = reactive([
+  { Id: 1, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, OperatorId: 3, LoadingTime: '2026-05-20 14:00', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:00', '上料通过') },
+  { Id: 2, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, OperatorId: 3, LoadingTime: '2026-05-20 14:05', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:05', '部分上料') },
+  { Id: 3, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, OperatorId: 3, LoadingTime: '2026-05-20 14:08', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:08', '上料通过') },
+  { Id: 4, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, OperatorId: 3, LoadingTime: '2026-05-20 08:30', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:30', '上料通过') },
+  { Id: 5, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, OperatorId: 3, LoadingTime: '2026-05-20 08:32', ActualQuantity: 2000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:32', '上料通过') },
+  { Id: 6, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, OperatorId: 3, LoadingTime: '2026-05-20 08:35', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:35', '上料通过') },
+  { Id: 7, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 5, OperatorId: 3, LoadingTime: '2026-05-20 08:38', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:38', '上料通过') },
+])
 
-export function inspectionTypeByStep(step = '') {
-  if (step.includes('SPI')) return 'SPI'
-  if (step.includes('AOI')) return 'AOI'
-  return ''
-}
+export const unloadingRecords = reactive([])
+export const repairTasks = reactive([])
+export const repairRecords = repairTasks
 
-export function isInspectionProcess(step = '') {
-  return Boolean(inspectionTypeByStep(step))
-}
-
-export function getInspectionThreshold(step = '') {
-  const type = inspectionTypeByStep(step)
-  if (!type) return 0
-  const product = products[0]
-  if (type === 'SPI') return product?.SpiThreshold ?? inspectionThresholds.SPI
-  if (type === 'AOI') return product?.AoiThreshold ?? inspectionThresholds.AOI
-  return inspectionThresholds[type] || 0
-}
-
-export const bomItems = [
-  { material: 'R0603-10K', position: 'R1,R2,R3', qty: 3, spec: '0603 10K 1%', packageType: '0603', substitute: '-' },
-  { material: 'C0402-10uF', position: 'C1,C4', qty: 2, spec: '0402 10uF 16V', packageType: '0402', substitute: 'C0402-10uF-B' },
-  { material: 'U-QFN32-MCU', position: 'U1', qty: 1, spec: 'QFN32 MCU', packageType: 'QFN32', substitute: '-' },
-  { material: 'LED0603-G', position: 'D1,D2', qty: 2, spec: '0603 Green', packageType: '0603', substitute: '-' },
-]
-
-const loadingTaskTemplate = [
-  { station: 'F-001', material: 'R0603-10K', spec: '0603 10K 1%', packageType: '0603', required: 3000, loaded: 0, status: '待上料', substitute: '-' },
-  { station: 'F-002', material: 'C0402-10uF', spec: '0402 10uF 16V', packageType: '0402', required: 2000, loaded: 0, status: '待上料', substitute: 'C0402-10uF-B' },
-  { station: 'F-003', material: 'U-QFN32-MCU', spec: 'QFN32 MCU', packageType: 'QFN32', required: 600, loaded: 0, status: '待上料', substitute: '-' },
-  { station: 'F-004', material: 'LED0603-G', spec: '0603 Green', packageType: '0603', required: 1200, loaded: 0, status: '待上料', substitute: '-' },
-]
-
-function cloneLoadingTasks(overrides = {}) {
-  return loadingTaskTemplate.map((item) => ({ ...item, loadingRecords: [], ...overrides[item.station] }))
-}
-
-export const batchLoadingState = reactive({
-  'B20260512005-01': cloneLoadingTasks({
-    'F-001': { loaded: 3000, status: '已齐套' },
-    'F-002': { loaded: 1200, status: '待补料' },
-    'F-003': { loaded: 600, status: '已齐套' },
-    'F-004': { loaded: 0, status: '待上料' },
-  }),
-  'B20260512001-01': cloneLoadingTasks({
-    'F-001': { loaded: 3000, status: '已齐套' },
-    'F-002': { loaded: 2000, status: '已齐套' },
-    'F-003': { loaded: 600, status: '已齐套' },
-    'F-004': { loaded: 1200, status: '已齐套' },
-  }),
-})
-
-export const batchProcessState = reactive({
-  'B20260512001-01': [
-    { step: 'AOI 检测', status: 'checked_in', inAt: '2026-05-20 13:10', outAt: '-', qty: 528, goodQty: 520, badQty: 7, scrapQty: 1, deviceId: 'AOI-A1-01', operator: '张工' },
-  ],
-  'B20260512001-02': [
-    { step: 'AOI 检测', status: 'checked_out', inAt: '2026-05-20 11:30', outAt: '2026-05-20 12:10', qty: 600, goodQty: 600, badQty: 0, scrapQty: 0, deviceId: 'AOI-A1-01', operator: '张工' },
-  ],
+export const batchLockState = reactive({
+  'B20260512005-01': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
+  'B20260512001-01': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
+  'B20260512001-02': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
 })
 
 export const batchExecutionState = reactive({
-  'B20260512005-01': {
-    pendingQty: 0,
-    currentInQty: 0,
-    currentInAt: '-',
-    currentDeviceId: '',
-    currentOperator: '',
-  },
-  'B20260512001-01': {
-    pendingQty: 0,
-    currentInQty: 528,
-    currentInAt: '2026-05-20 13:10',
-    currentDeviceId: 'AOI-A1-01',
-    currentOperator: '张工',
-  },
-  'B20260512001-02': {
-    pendingQty: 0,
-    currentInQty: 0,
-    currentInAt: '-',
-    currentDeviceId: '',
-    currentOperator: '',
-  },
+  'B20260512005-01': { PendingQuantity: 0, CurrentInQuantity: 0, CurrentInTime: null, CurrentEquipmentId: null, CurrentOperatorId: null },
+  'B20260512001-01': { PendingQuantity: 0, CurrentInQuantity: 528, CurrentInTime: '2026-05-20 13:10', CurrentEquipmentId: 5, CurrentOperatorId: 3 },
+  'B20260512001-02': { PendingQuantity: 0, CurrentInQuantity: 0, CurrentInTime: null, CurrentEquipmentId: null, CurrentOperatorId: null },
 })
 
 export const batchTraceState = reactive({
   'B20260512005-01': [
-    { id: 'B20260512005-01-1', time: '2026-05-20 14:20', type: 'status', step: '-', message: '批次已创建，等待投产生成首道工序' },
+    { Id: 'B20260512005-01-1', EventTime: '2026-05-20 14:20', EventType: 'status', RouteStepId: null, Message: '批次已创建，等待投产生成首道工序' },
   ],
   'B20260512001-01': [
-    { id: 'B20260512001-01-1', time: '2026-05-20 13:10', type: 'checkin', step: 'AOI 检测', qty: 528, deviceId: 'AOI-A1-01', operator: '张工', message: 'AOI 检测已进站' },
+    { Id: 'B20260512001-01-1', EventTime: '2026-05-20 13:10', EventType: 'checkin', RouteStepId: 105, Quantity: 528, EquipmentId: 5, OperatorId: 3, Message: 'AOI 检测已进站' },
   ],
   'B20260512001-02': [
-    { id: 'B20260512001-02-1', time: '2026-05-20 12:10', type: 'status', step: '已下线', qty: 600, message: '批次全部工序完成' },
+    { Id: 'B20260512001-02-1', EventTime: '2026-05-20 12:10', EventType: 'status', RouteStepId: 105, Quantity: 600, Message: '批次全部工序完成' },
   ],
 })
 
 export const batchLoadingRequestState = reactive({})
 
-export function getBatchLoadingTasks(batchId) {
-  if (!batchId || !findBatch(batchId)) return []
-  if (!batchLoadingState[batchId]) {
-    batchLoadingState[batchId] = cloneLoadingTasks()
-  }
-  return batchLoadingState[batchId]
-}
-
-export function fillBatchMaterial(batchId, payload) {
-  const tasks = getBatchLoadingTasks(batchId)
-  const target = tasks.find((item) => item.station === payload.station)
-  if (!target) {
-    return { ok: false, message: '站位不存在。' }
-  }
-  const scannedCode = String(payload.materialCode || '').trim()
-  if (!scannedCode) {
-    return { ok: false, message: '物料条码不能为空。' }
-  }
-  const allowedMaterials = [target.material]
-  if (target.substitute && target.substitute !== '-') {
-    allowedMaterials.push(...String(target.substitute).split(/[、,，/]/).map((item) => item.trim()).filter(Boolean))
-  }
-  const matchedMaterial = allowedMaterials.find((material) => scannedCode === material || scannedCode.startsWith(`${material}#`))
-  if (!matchedMaterial) {
-    return {
-      ok: false,
-      message: `物料不匹配：站位 ${target.station} 需要 ${target.material}${target.substitute && target.substitute !== '-' ? `，允许替代料 ${target.substitute}` : ''}。`,
-    }
-  }
-  const addedQty = Math.max(Number(payload.loaded) || 0, 0)
-  if (addedQty <= 0) {
-    return { ok: false, message: '上料数量必须大于 0。' }
-  }
-  target.loaded = Math.min(target.loaded + addedQty, target.required)
-  target.status = target.loaded >= target.required ? '已齐套' : '待补料'
-  target.scannedMaterial = payload.materialCode
-  target.matchedMaterial = matchedMaterial
-  target.lastLoadedAt = payload.loadedAt
-  target.operator = payload.operator
-  target.lastAddedQty = addedQty
-  target.loadingRecords = [
-    {
-      materialCode: payload.materialCode,
-      addedQty,
-      loadedAt: payload.loadedAt,
-      operator: payload.operator,
-    },
-    ...(target.loadingRecords || []),
-  ]
-  if (validateBatchLoading(batchId).pass) {
-    clearBatchLoadingRequest(batchId)
-  }
-  return { ok: true, task: target }
-}
-
-export function getBatchLoadingSummary(batchId) {
-  const tasks = getBatchLoadingTasks(batchId)
-  const finished = tasks.filter((item) => item.loaded >= item.required).length
-  return {
-    total: tasks.length,
-    finished,
-    percentage: tasks.length ? Math.round((finished / tasks.length) * 100) : 0,
-  }
-}
-
-export function validateBatchLoading(batchId) {
-  const tasks = getBatchLoadingTasks(batchId)
-  const missing = tasks.filter((item) => item.loaded < item.required)
-  return {
-    pass: missing.length === 0,
-    missing,
-    message: missing.length === 0 ? 'BOM 上料校验通过。' : `仍有 ${missing.length} 个站位未齐套。`,
-  }
-}
-
-export function requestBatchLoading(batchId, reason = '进站 BOM 校验未通过') {
-  const batch = findBatch(batchId)
-  if (!batch) return { ok: false, message: '批次不存在。' }
-  batchLoadingRequestState[batchId] = {
-    batchId,
-    reason,
-    requestedAt: nowText(),
-  }
-  return { ok: true, request: batchLoadingRequestState[batchId] }
-}
-
-export function clearBatchLoadingRequest(batchId) {
-  delete batchLoadingRequestState[batchId]
-}
-
-export function hasBatchLoadingRequest(batchId) {
-  return Boolean(batchLoadingRequestState[batchId])
-}
-
-export const processTimeline = [
-  { step: '印刷', inAt: '08:42', outAt: '09:02', qty: 600, bad: 0, operator: '张工', device: 'PRT-A1-01', result: '通过' },
-  { step: 'SPI 检测', inAt: '09:05', outAt: '09:28', qty: 596, bad: 4, operator: '张工', device: 'SPI-A1-01', result: '通过' },
-  { step: '贴片', inAt: '09:33', outAt: '11:40', qty: 590, bad: 6, operator: '周工', device: 'MNT-A1-01', result: '通过' },
-  { step: '回流焊接', inAt: '11:50', outAt: '12:20', qty: 586, bad: 4, operator: '周工', device: 'RFL-A1-01', result: '通过' },
-  { step: 'AOI 检测', inAt: '13:10', outAt: '-', qty: 528, bad: 7, operator: '张工', device: 'AOI-A1-01', result: '已进站' },
-]
-
-export const loadingTasks = getBatchLoadingTasks('B20260512005-01')
-
-export const repairTasks = reactive([])
-
 export const alerts = reactive([
-  { id: 1, level: 'warning', type: '流程提醒', title: 'B20260512005-01 投产后将在进站时校验 BOM 齐套', target: '/production/batch', time: '14:20' },
+  { Id: 1, Level: 'warning', AlertType: '流程提醒', Title: 'B20260512005-01 投产后将在进站时校验 BOM 齐套', TargetUrl: '/production/batch', AlertTime: '14:20' },
 ])
 
 export const messages = reactive([
-  { id: 1, category: '生产通知', title: '批次待投产', content: 'B20260512005-01 已创建，投产后生成首道工序待进站。', time: '2026-05-20 14:20', unread: true, link: '/production/batch' },
+  { Id: 1, Category: '生产通知', Title: '批次待投产', Content: 'B20260512005-01 已创建，投产后生成首道工序待进站。', MessageTime: '2026-05-20 14:20', IsUnread: true, LinkUrl: '/production/batch' },
 ])
 
 export const qualityTrend = [
@@ -473,25 +419,415 @@ export function percent(done, total) {
   return Math.round((done / total) * 100)
 }
 
-export function getBatchRouteProgress(batchId) {
-  const batch = findBatch(batchId)
-  if (!batch) return 0
-  const route = findBatchRoute(batch)
-  const totalSteps = route?.steps?.length || 0
-  if (!totalSteps) return 0
-  if (batch.status === 'completed') return 100
+export function nowText() {
+  return NOW
+}
 
-  const currentIndex = route.steps.findIndex((item) => item.step === batch.currentStep)
-  if (currentIndex < 0) return 0
+export function findProduct(productId) {
+  return products.find((item) => item.Id === productId) || null
+}
+
+export function findProductByCode(productCode) {
+  return products.find((item) => item.ProductCode === productCode || item.Model === productCode) || null
+}
+
+export function findWorkOrder(workOrderId) {
+  return workOrders.find((item) => item.Id === workOrderId || item.WorkOrderCode === workOrderId) || null
+}
+
+export function findBatch(lotId) {
+  return batches.find((item) => item.Id === lotId || item.LotCode === lotId) || null
+}
+
+export function findLine(lineId) {
+  return lines.find((item) => item.Id === lineId || item.LineCode === lineId) || null
+}
+
+export function findEquipment(equipmentId) {
+  return equipment.find((item) => item.Id === equipmentId || item.EquipmentCode === equipmentId) || null
+}
+
+export function findUser(userId) {
+  return users.find((item) => item.Id === userId || item.FullName === userId || item.Username === userId) || null
+}
+
+export function getUserOptionLabel(user) {
+  if (!user) return '-'
+  return `${user.FullName} / ${user.Position} / ${user.Department}`
+}
+
+export function getUserDisplayName(userId) {
+  const user = findUser(userId)
+  return user ? `${user.FullName} / ${user.Position}` : '-'
+}
+
+export function findRoute(routeId) {
+  return routes.find((item) => item.Id === routeId || item.RouteCode === routeId) || null
+}
+
+export function findOperation(operationId) {
+  return operations.find((item) => item.Id === operationId) || null
+}
+
+export function findRouteStep(routeStepId) {
+  return routeSteps.find((item) => item.Id === routeStepId) || null
+}
+
+export function routeById(routeId) {
+  return findRoute(routeId) || routes[0]
+}
+
+export function routeOptionsByProduct(productKey) {
+  const product = typeof productKey === 'number' ? findProduct(productKey) : findProductByCode(productKey)
+  if (!product) return []
+  return routes.filter((route) => route.ProductTypeId === product.ProductTypeId && route.Status === 2)
+}
+
+export function getRouteStepRows(routeId) {
+  return routeSteps
+    .filter((step) => step.RouteId === routeId)
+    .sort((a, b) => a.Sequence - b.Sequence)
+    .map((step) => {
+      const operation = findOperation(step.OperationId)
+      const equipmentType = equipmentTypes.find((item) => item.Id === step.EquipmentTypeId)
+      return {
+        ...step,
+        OperationCode: operation?.OperationCode || '',
+        OperationName: operation?.OperationName || '-',
+        EquipmentTypeName: equipmentType?.EquipmentTypeName || '-',
+        StandardTimeText: `${Math.round((step.StandardTime || 0) / 60)} 分钟`,
+      }
+    })
+}
+
+export function getRouteFirstStep(routeId) {
+  return getRouteStepRows(routeId)[0] || null
+}
+
+export function getWorkOrderProduct(order) {
+  return order ? findProduct(order.ProductId) : null
+}
+
+export function getWorkOrderRoute(order) {
+  return order ? findRoute(order.RouteId) : null
+}
+
+export function getWorkOrderLots(order) {
+  if (!order) return []
+  return batches.filter((batch) => batch.WorkOrderId === order.Id)
+}
+
+export function getWorkOrderCompletedQuantity(order) {
+  return getWorkOrderLots(order).reduce((sum, batch) => sum + (batch.CompletedQuantity || 0), 0)
+}
+
+export function getWorkOrderReleasedBatchCount(order) {
+  return getWorkOrderLots(order).length
+}
+
+export function getWorkOrderCompletedBatchCount(order) {
+  return getWorkOrderLots(order).filter((batch) => batch.Status === BATCH_STATUS_CODE.completed).length
+}
+
+export function getBatchWorkOrder(batch) {
+  return batch ? findWorkOrder(batch.WorkOrderId) : null
+}
+
+export function getBatchProduct(batch) {
+  const order = getBatchWorkOrder(batch)
+  return getWorkOrderProduct(order)
+}
+
+export function getBatchLine(batch) {
+  return batch ? findLine(batch.LineId) : null
+}
+
+export function getBatchLockInfo(batch) {
+  return batchLockState[batch?.LotCode] || { LockReason: '-', AutoLocked: false, OwnerId: null }
+}
+
+export function getBatchDefectQuantity(batch) {
+  if (!batch) return 0
+  return lotOperationStatus
+    .filter((record) => record.LotId === batch.Id)
+    .reduce((sum, record) => sum + (record.DefectQuantity || 0), 0)
+}
+
+export function getBatchScrapQuantity(batch) {
+  if (!batch) return 0
+  const repairScrapQuantity = repairTasks
+    .filter((record) => record.LotId === batch.Id)
+    .reduce((sum, record) => sum + (record.ScrapQuantity || 0), 0)
+  const directScrapQuantity = stationOutRecords
+    .filter((record) => record.LotId === batch.Id)
+    .reduce((sum, record) => sum + (record.ScrapQuantity || 0), 0)
+  return repairScrapQuantity + directScrapQuantity
+}
+
+export function getCurrentProcess(batchOrCode) {
+  const batch = typeof batchOrCode === 'object' ? batchOrCode : findBatch(batchOrCode)
+  if (!batch) return null
+  const records = lotOperationStatus.filter((record) => record.LotId === batch.Id)
+  return records[records.length - 1] || null
+}
+
+export function getCurrentProcessStatus(batchCode) {
+  const process = getCurrentProcess(batchCode)
+  return process?.Status || ''
+}
+
+export function getCurrentOperationName(batchOrCode) {
+  const process = getCurrentProcess(batchOrCode)
+  if (!process) return '-'
+  const routeStep = findRouteStep(process.RouteStepId)
+  return findOperation(routeStep?.OperationId)?.OperationName || '-'
+}
+
+export function getBatchPendingQty(batchCode) {
+  const state = batchExecutionState[batchCode]
+  return state?.PendingQuantity || 0
+}
+
+export function getBatchCurrentInQty(batchCode) {
+  const state = batchExecutionState[batchCode]
+  return state?.CurrentInQuantity || 0
+}
+
+export function getEquipmentTypeName(equipmentTypeId) {
+  return equipmentTypes.find((item) => item.Id === equipmentTypeId)?.EquipmentTypeName || '-'
+}
+
+export function getEquipmentRuntime(equipmentItem) {
+  return equipmentRuntimeState[equipmentItem?.EquipmentCode] || {
+    CurrentLotCode: '-',
+    RunDuration: '-',
+    Oee: 0,
+    DailyOutput: 0,
+    ThrowRate: '-',
+    FaultDescription: '-',
+  }
+}
+
+export function getLineDashboard(line) {
+  const lineBatches = batches.filter((batch) => batch.LineId === line.Id && batch.Status !== BATCH_STATUS_CODE.completed)
+  const currentBatch = lineBatches[0] || batches.find((batch) => batch.LineId === line.Id) || null
+  const order = getBatchWorkOrder(currentBatch)
+  const product = getWorkOrderProduct(order)
+  const lineEquipment = equipment.filter((item) => item.LineId === line.Id)
+  const planned = getWorkOrderLots(order).reduce((sum, batch) => sum + (batch.PlannedQuantity || 0), 0)
+  const completed = getWorkOrderLots(order).reduce((sum, batch) => sum + (batch.CompletedQuantity || 0), 0)
+  return {
+    LineCode: line.LineCode,
+    LineName: line.LineName,
+    Workshop: line.Workshop,
+    Status: currentBatch?.Status === BATCH_STATUS_CODE.pending ? 2 : 1,
+    WorkOrderCode: order?.WorkOrderCode || '-',
+    LotCode: currentBatch?.LotCode || '-',
+    ProductCode: product?.ProductCode || '-',
+    ProductName: product?.ProductName || '-',
+    PlannedQuantity: planned,
+    CompletedQuantity: completed,
+    EquipmentStatuses: lineEquipment.map((item) => DEVICE_STATUS_KEY[item.Status] || item.Status),
+    Oee: 86.4,
+    DueTime: currentBatch?.EstimatedCompletionTime?.slice(11, 16) || '-',
+    AlertCount: 0,
+  }
+}
+
+export function getLineDashboardRows() {
+  return lines.map(getLineDashboard)
+}
+
+export function getBomDisplayItems(productId = 1) {
+  const activeBom = boms.find((item) => item.ProductId === productId && item.IsActive === 1)
+  if (!activeBom) return []
+  return bomItems
+    .filter((item) => item.BomId === activeBom.Id)
+    .map((item) => {
+      const material = materials.find((materialItem) => materialItem.Id === item.MaterialId)
+      const substitutes = materialSubstitutes
+        .filter((substitute) => substitute.MaterialId === item.MaterialId)
+        .map((substitute) => materials.find((materialItem) => materialItem.Id === substitute.SubstituteMaterialId)?.MaterialCode)
+        .filter(Boolean)
+      return {
+        ...item,
+        MaterialCode: material?.MaterialCode || '-',
+        MaterialDesc: material?.MaterialDesc || '-',
+        SubstituteMaterialCodes: substitutes.join(',') || '-',
+      }
+    })
+}
+
+function requiredQuantityForLot(bomItem, batch) {
+  return (bomItem.Quantity || 0) * (batch?.PlannedQuantity || 0)
+}
+
+export function getBatchLoadingTasks(lotCode) {
+  const batch = findBatch(lotCode)
+  if (!batch) return []
+  const product = getBatchProduct(batch)
+  const activeBom = boms.find((item) => item.ProductId === product?.Id && item.IsActive === 1)
+  if (!activeBom) return []
+  const firstStep = getRouteFirstStep(getBatchWorkOrder(batch)?.RouteId)
+  return bomItems
+    .filter((item) => item.BomId === activeBom.Id)
+    .map((item, index) => {
+      const material = materials.find((materialItem) => materialItem.Id === item.MaterialId)
+      const substitutes = materialSubstitutes
+        .filter((substitute) => substitute.MaterialId === item.MaterialId)
+        .map((substitute) => materials.find((materialItem) => materialItem.Id === substitute.SubstituteMaterialId)?.MaterialCode)
+        .filter(Boolean)
+      const allowedMaterialIds = [
+        item.MaterialId,
+        ...materialSubstitutes
+          .filter((substitute) => substitute.MaterialId === item.MaterialId)
+          .map((substitute) => substitute.SubstituteMaterialId),
+      ]
+      const records = loadingRecords
+        .filter((record) => record.LotId === batch.Id && allowedMaterialIds.includes(record.MaterialId))
+        .sort((a, b) => String(b.LoadingTime).localeCompare(String(a.LoadingTime)))
+      const loaded = records.reduce((sum, record) => sum + (record.ActualQuantity || 0), 0)
+      const required = requiredQuantityForLot(item, batch)
+      return {
+        BomItemId: item.Id,
+        LotId: batch.Id,
+        LotCode: batch.LotCode,
+        RouteStepId: firstStep?.Id || null,
+        StationCode: `F-${String(index + 1).padStart(3, '0')}`,
+        MaterialId: item.MaterialId,
+        MaterialCode: material?.MaterialCode || '-',
+        MaterialDesc: material?.MaterialDesc || '-',
+        PackageType: item.PackageType,
+        RequiredQuantity: required,
+        LoadedQuantity: loaded,
+        VerifyStatus: loaded >= required ? VERIFY_STATUS_CODE.passed : VERIFY_STATUS_CODE.pending,
+        SubstituteMaterialCodes: substitutes.join(',') || '-',
+        LoadingRecords: records,
+      }
+    })
+}
+
+export function fillBatchMaterial(lotCode, payload) {
+  const batch = findBatch(lotCode)
+  if (!batch) return { ok: false, message: '批次不存在。' }
+  const tasks = getBatchLoadingTasks(lotCode)
+  const target = tasks.find((item) => item.StationCode === payload.StationCode || item.StationCode === payload.station)
+  if (!target) return { ok: false, message: '站位不存在。' }
+
+  const scannedCode = String(payload.MaterialCode || payload.materialCode || '').trim()
+  if (!scannedCode) return { ok: false, message: '物料条码不能为空。' }
+
+  const allowedMaterials = [target.MaterialCode]
+  if (target.SubstituteMaterialCodes && target.SubstituteMaterialCodes !== '-') {
+    allowedMaterials.push(...String(target.SubstituteMaterialCodes).split(/[,，]/).map((item) => item.trim()).filter(Boolean))
+  }
+  const matchedCode = allowedMaterials.find((materialCode) => scannedCode === materialCode || scannedCode.startsWith(`${materialCode}#`))
+  if (!matchedCode) {
+    return {
+      ok: false,
+      message: `物料不匹配：站位 ${target.StationCode} 需要 ${target.MaterialCode}${target.SubstituteMaterialCodes !== '-' ? `，允许替代料 ${target.SubstituteMaterialCodes}` : ''}。`,
+    }
+  }
+
+  const material = materials.find((item) => item.MaterialCode === matchedCode)
+  const actualQuantity = Math.max(Number(payload.ActualQuantity ?? payload.loaded) || 0, 0)
+  if (actualQuantity <= 0) return { ok: false, message: '上料数量必须大于 0。' }
+
+  const operator = findUser(payload.OperatorId || payload.operator) || users[2]
+  const routeStepId = target.RouteStepId
+  const equipmentId = payload.EquipmentId || equipment.find((item) => item.LineId === batch.LineId)?.Id || 1
+  const nextRecord = {
+    Id: Date.now(),
+    LotId: batch.Id,
+    RouteStepId: routeStepId,
+    EquipmentId: equipmentId,
+    MaterialId: material?.Id || target.MaterialId,
+    OperatorId: operator.Id,
+    LoadingTime: payload.LoadingTime || payload.loadedAt || nowText(),
+    ActualQuantity: actualQuantity,
+    VerifyStatus: VERIFY_STATUS_CODE.passed,
+    VerifyRemark: '',
+    ...auditFields(payload.LoadingTime || payload.loadedAt || nowText(), '扫码上料'),
+  }
+  loadingRecords.unshift(nextRecord)
+  if (validateBatchLoading(lotCode).pass) clearBatchLoadingRequest(lotCode)
+  return { ok: true, task: getBatchLoadingTasks(lotCode).find((item) => item.BomItemId === target.BomItemId), record: nextRecord }
+}
+
+export function getBatchLoadingSummary(lotCode) {
+  const tasks = getBatchLoadingTasks(lotCode)
+  const finished = tasks.filter((item) => item.LoadedQuantity >= item.RequiredQuantity).length
+  return {
+    TotalCount: tasks.length,
+    FinishedCount: finished,
+    Percentage: tasks.length ? Math.round((finished / tasks.length) * 100) : 0,
+    total: tasks.length,
+    finished,
+    percentage: tasks.length ? Math.round((finished / tasks.length) * 100) : 0,
+  }
+}
+
+export function validateBatchLoading(lotCode) {
+  const tasks = getBatchLoadingTasks(lotCode)
+  const missing = tasks.filter((item) => item.LoadedQuantity < item.RequiredQuantity)
+  return {
+    pass: missing.length === 0,
+    missing,
+    message: missing.length === 0 ? 'BOM 上料校验通过。' : `仍有 ${missing.length} 个站位未齐套。`,
+  }
+}
+
+export function requestBatchLoading(lotCode, reason = '进站 BOM 校验未通过') {
+  const batch = findBatch(lotCode)
+  if (!batch) return { ok: false, message: '批次不存在。' }
+  batchLoadingRequestState[lotCode] = {
+    LotCode: lotCode,
+    LotId: batch.Id,
+    Reason: reason,
+    RequestedAt: nowText(),
+  }
+  return { ok: true, request: batchLoadingRequestState[lotCode] }
+}
+
+export function clearBatchLoadingRequest(lotCode) {
+  delete batchLoadingRequestState[lotCode]
+}
+
+export function hasBatchLoadingRequest(lotCode) {
+  return Boolean(batchLoadingRequestState[lotCode])
+}
+
+export const loadingTasks = getBatchLoadingTasks('B20260512005-01')
+
+export const processTimeline = [
+  { RouteStepId: 101, OperationName: '印刷', StationInTime: '08:42', StationOutTime: '09:02', StationInQuantity: 600, DefectQuantity: 0, OperatorName: '张工', EquipmentCode: 'PRT-A1-01', Result: '通过' },
+  { RouteStepId: 102, OperationName: 'SPI 检测', StationInTime: '09:05', StationOutTime: '09:28', StationInQuantity: 596, DefectQuantity: 4, OperatorName: '张工', EquipmentCode: 'SPI-A1-01', Result: '通过' },
+  { RouteStepId: 103, OperationName: '贴片', StationInTime: '09:33', StationOutTime: '11:40', StationInQuantity: 590, DefectQuantity: 6, OperatorName: '周工', EquipmentCode: 'MNT-A1-01', Result: '通过' },
+  { RouteStepId: 104, OperationName: '回流焊接', StationInTime: '11:50', StationOutTime: '12:20', StationInQuantity: 586, DefectQuantity: 4, OperatorName: '周工', EquipmentCode: 'RFL-A1-01', Result: '通过' },
+  { RouteStepId: 105, OperationName: 'AOI 检测', StationInTime: '13:10', StationOutTime: '-', StationInQuantity: 528, DefectQuantity: 7, OperatorName: '张工', EquipmentCode: 'AOI-A1-01', Result: '已进站' },
+]
+
+export function getBatchRouteProgress(lotCode) {
+  const batch = findBatch(lotCode)
+  if (!batch) return 0
+  const order = getBatchWorkOrder(batch)
+  const totalSteps = getRouteStepRows(order?.RouteId).length
+  if (!totalSteps) return 0
+  if (batch.Status === BATCH_STATUS_CODE.completed) return 100
+
+  const currentProcess = getCurrentProcess(batch)
+  const currentStep = findRouteStep(currentProcess?.RouteStepId)
+  if (!currentStep) return 0
+  const currentIndex = getRouteStepRows(order.RouteId).findIndex((item) => item.Id === currentStep.Id)
   return Math.max(0, Math.min(100, Math.round((currentIndex / totalSteps) * 100)))
 }
 
 export function dashboardMetrics() {
   const totalOrders = workOrders.length
-  const inProcessBatches = batches.filter((item) => ['running', 'paused', 'repair', 'locked'].includes(item.status)).length
-  const planTotal = workOrders.reduce((sum, item) => sum + item.planned, 0)
-  const completedTotal = workOrders.reduce((sum, item) => sum + item.completed, 0)
-  const defective = batches.reduce((sum, item) => sum + item.defective, 0)
+  const inProcessBatches = batches.filter((item) => [BATCH_STATUS_CODE.running, BATCH_STATUS_CODE.paused, BATCH_STATUS_CODE.repair, BATCH_STATUS_CODE.locked].includes(item.Status)).length
+  const planTotal = workOrders.reduce((sum, item) => sum + item.PlannedQuantity, 0)
+  const completedTotal = batches.reduce((sum, item) => sum + item.CompletedQuantity, 0)
+  const defective = batches.reduce((sum, item) => sum + getBatchDefectQuantity(item), 0)
   return {
     totalOrders,
     inProcessBatches,
@@ -500,477 +836,430 @@ export function dashboardMetrics() {
   }
 }
 
-function nowText() {
-  return NOW
-}
-
 function setWorkOrderStatus(order, status) {
   if (!order) return
-  order.status = status
-  order.Status = WORK_ORDER_STATUS_CODE[status] || status
+  order.Status = getStatusCode(WORK_ORDER_STATUS_CODE, status) || order.Status
+  order.UpdatedAt = nowText()
+  order.UpdatedBy = SYSTEM_USER_ID
 }
 
 function setBatchStatus(batch, status) {
   if (!batch) return
-  batch.status = status
-  batch.Status = BATCH_STATUS_CODE[status] || status
+  batch.Status = getStatusCode(BATCH_STATUS_CODE, status) || batch.Status
+  batch.UpdatedAt = nowText()
+  batch.UpdatedBy = SYSTEM_USER_ID
 }
 
 function setBatchCompletedQuantity(batch, qty) {
   if (!batch) return
-  batch.completed = qty
   batch.CompletedQuantity = qty
+  batch.UpdatedAt = nowText()
 }
 
 function setBatchTiming(batch, payload = {}) {
   if (!batch) return
-  if (payload.estimatedCompletionTime !== undefined) {
-    batch.eta = payload.estimatedCompletionTime || '-'
-    batch.EstimatedCompletionTime = payload.estimatedCompletionTime || null
+  if (payload.EstimatedCompletionTime !== undefined || payload.estimatedCompletionTime !== undefined) {
+    batch.EstimatedCompletionTime = payload.EstimatedCompletionTime ?? payload.estimatedCompletionTime ?? null
   }
-  if (payload.startTime !== undefined) {
-    batch.onlineAt = payload.startTime || '-'
-    batch.StartTime = payload.startTime || null
+  if (payload.StartTime !== undefined || payload.startTime !== undefined) {
+    batch.StartTime = payload.StartTime ?? payload.startTime ?? null
   }
-  if (payload.endTime !== undefined) {
-    batch.EndTime = payload.endTime || null
+  if (payload.EndTime !== undefined || payload.endTime !== undefined) {
+    batch.EndTime = payload.EndTime ?? payload.endTime ?? null
   }
 }
 
-function findBatch(batchId) {
-  return batches.find((item) => item.id === batchId || item.LotCode === batchId || item.Id === batchId) || null
-}
-
-function findBatchRoute(batch) {
-  if (!batch) return null
-  const workOrder = workOrders.find((item) => item.id === batch.workOrderId || item.Id === batch.WorkOrderId)
-  if (!workOrder) return null
-  return processRoutes.find((item) => item.id === workOrder.routeId || item.Id === workOrder.RouteId) || null
-}
-
-function ensureBatchExecutionState(batchId) {
-  if (!batchExecutionState[batchId]) {
-    batchExecutionState[batchId] = {
-      pendingQty: 0,
-      currentInQty: 0,
-      currentInAt: '-',
-      currentDeviceId: '',
-      currentOperator: '',
+function ensureBatchExecutionState(lotCode) {
+  if (!batchExecutionState[lotCode]) {
+    batchExecutionState[lotCode] = {
+      PendingQuantity: 0,
+      CurrentInQuantity: 0,
+      CurrentInTime: null,
+      CurrentEquipmentId: null,
+      CurrentOperatorId: null,
     }
   }
-  return batchExecutionState[batchId]
+  return batchExecutionState[lotCode]
 }
 
-function ensureBatchTraceState(batchId) {
-  if (!batchTraceState[batchId]) {
-    batchTraceState[batchId] = []
-  }
-  return batchTraceState[batchId]
+function ensureBatchTraceState(lotCode) {
+  if (!batchTraceState[lotCode]) batchTraceState[lotCode] = []
+  return batchTraceState[lotCode]
 }
 
-function ensureBatchProcessState(batchId) {
-  if (!batchProcessState[batchId]) {
-    batchProcessState[batchId] = []
-  }
-  return batchProcessState[batchId]
-}
-
-function pushBatchTrace(batchId, payload) {
-  const trace = ensureBatchTraceState(batchId)
+function pushBatchTrace(lotCode, payload) {
+  const trace = ensureBatchTraceState(lotCode)
   trace.unshift({
-    id: `${batchId}-${trace.length + 1}`,
-    time: payload.time || nowText(),
-    ...payload,
+    Id: `${lotCode}-${trace.length + 1}`,
+    EventTime: payload.EventTime || payload.time || nowText(),
+    EventType: payload.EventType || payload.type || 'status',
+    RouteStepId: payload.RouteStepId || null,
+    Quantity: payload.Quantity || payload.qty || 0,
+    FinishedQuantity: payload.FinishedQuantity || payload.goodQty || 0,
+    DefectQuantity: payload.DefectQuantity || payload.badQty || 0,
+    ScrapQuantity: payload.ScrapQuantity || payload.scrapQty || 0,
+    EquipmentId: payload.EquipmentId || null,
+    OperatorId: payload.OperatorId || null,
+    Message: payload.Message || payload.message || '',
   })
 }
 
-function createProcessRecord(batch, step, status = 'wait_in', qty = 0) {
-  const records = ensureBatchProcessState(batch.id)
-  const route = findBatchRoute(batch)
-  const routeStep = route?.steps?.find((item) => item.step === step || item.OperationName === step)
+function createProcessRecord(batch, routeStep, status = 'wait_in', quantity = 0) {
   const record = {
+    Id: Date.now(),
     LotId: batch.Id,
     RouteStepId: routeStep?.Id || null,
-    Status: PROCESS_STATUS_CODE[status] || status,
-    StationInTime: '-',
-    StationInQuantity: qty,
-    StationOutTime: '-',
+    Status: getStatusCode(PROCESS_STATUS_CODE, status),
+    StationInTime: null,
+    StationInQuantity: quantity,
+    StationOutTime: null,
     FinishedQuantity: 0,
     DefectQuantity: 0,
-    step,
-    status,
-    inAt: '-',
-    outAt: '-',
-    qty,
-    goodQty: 0,
-    badQty: 0,
-    scrapQty: 0,
-    deviceId: '',
-    operator: '',
+    ...auditFields(nowText(), '创建工序状态'),
   }
-  records.push(record)
-  batch.currentStep = step
+  lotOperationStatus.push(record)
   return record
 }
 
-export function getBatchProcessRecords(batchId) {
-  return ensureBatchProcessState(batchId)
-}
-
-export function getCurrentProcess(batchId) {
-  const records = ensureBatchProcessState(batchId)
-  return records[records.length - 1] || null
-}
-
-export function getCurrentProcessStatus(batchId) {
-  return getCurrentProcess(batchId)?.status || ''
-}
-
-export function releaseBatchToFirstProcess(batchId) {
-  const batch = findBatch(batchId)
+export function releaseBatchToFirstProcess(lotCode) {
+  const batch = findBatch(lotCode)
   if (!batch) return { ok: false, message: '批次不存在。' }
-  if (batch.status !== 'pending') return { ok: false, message: '只有待生产批次可以投产。' }
+  if (batch.Status !== BATCH_STATUS_CODE.pending) return { ok: false, message: '只有待生产批次可以投产。' }
 
-  const route = findBatchRoute(batch)
-  const firstStep = route?.steps?.[0]?.step
+  const order = getBatchWorkOrder(batch)
+  const firstStep = getRouteFirstStep(order?.RouteId)
   if (!firstStep) return { ok: false, message: '未配置工艺路线。' }
 
-  const state = ensureBatchExecutionState(batchId)
-  createProcessRecord(batch, firstStep, 'wait_in', batch.planned)
-  state.pendingQty = batch.planned
+  const state = ensureBatchExecutionState(batch.LotCode)
+  createProcessRecord(batch, firstStep, 'wait_in', batch.PlannedQuantity)
+  state.PendingQuantity = batch.PlannedQuantity
   setBatchStatus(batch, 'running')
-  pushBatchTrace(batchId, {
-    type: 'status',
-    step: firstStep,
-    qty: batch.planned,
-    message: `投产成功，生成首道工序 ${firstStep} 待进站`,
-    time: nowText(),
+  pushBatchTrace(batch.LotCode, {
+    EventType: 'status',
+    RouteStepId: firstStep.Id,
+    Quantity: batch.PlannedQuantity,
+    Message: `投产成功，生成首道工序 ${findOperation(firstStep.OperationId)?.OperationName || '-'} 待进站`,
+    EventTime: nowText(),
   })
-  return { ok: true, batch, process: getCurrentProcess(batchId) }
+  return { ok: true, batch, process: getCurrentProcess(batch) }
 }
 
-export function getBatchPendingQty(batchId) {
-  return ensureBatchExecutionState(batchId).pendingQty || 0
-}
-
-export function getBatchCurrentInQty(batchId) {
-  return ensureBatchExecutionState(batchId).currentInQty || 0
-}
-
-export function getBatchTrace(batchId) {
-  return ensureBatchTraceState(batchId)
-}
-
-export function submitBatchCheckIn(batchId, payload) {
-  const batch = findBatch(batchId)
+export function submitBatchCheckIn(lotCode, payload) {
+  const batch = findBatch(lotCode)
   if (!batch) return { ok: false, message: '批次不存在。' }
 
-  const process = getCurrentProcess(batchId)
-  if (!process || process.status !== 'wait_in') {
-    return { ok: false, message: '当前工序不是待进站状态。' }
-  }
+  const process = getCurrentProcess(batch)
+  if (!process || process.Status !== PROCESS_STATUS_CODE.wait_in) return { ok: false, message: '当前工序不是待进站状态。' }
 
-  const state = ensureBatchExecutionState(batchId)
-  const qty = Math.max(Number(payload.qty) || 0, 0)
-  if (qty <= 0) return { ok: false, message: '进站数量必须大于 0。' }
+  const state = ensureBatchExecutionState(batch.LotCode)
+  const stationInQuantity = Math.max(Number(payload.StationInQuantity ?? payload.qty) || 0, 0)
+  if (stationInQuantity <= 0) return { ok: false, message: '进站数量必须大于 0。' }
 
-  state.pendingQty = 0
-  state.currentInQty = qty
-  state.currentInAt = payload.inAt || nowText()
-  state.currentDeviceId = payload.deviceId || ''
-  state.currentOperator = payload.operator || ''
+  const equipmentItem = findEquipment(payload.EquipmentId || payload.deviceId)
+  const operator = findUser(payload.OperatorId || payload.operator) || users[2]
+  const stationInTime = payload.StationInTime || payload.inAt || nowText()
 
-  process.status = 'checked_in'
+  state.PendingQuantity = 0
+  state.CurrentInQuantity = stationInQuantity
+  state.CurrentInTime = stationInTime
+  state.CurrentEquipmentId = equipmentItem?.Id || null
+  state.CurrentOperatorId = operator.Id
+
   process.Status = PROCESS_STATUS_CODE.checked_in
-  process.inAt = state.currentInAt
-  process.StationInTime = state.currentInAt
-  process.qty = qty
-  process.StationInQuantity = qty
-  process.deviceId = state.currentDeviceId
-  process.operator = state.currentOperator
+  process.StationInTime = stationInTime
+  process.StationInQuantity = stationInQuantity
+  process.UpdatedAt = stationInTime
 
-  if (batch.onlineAt === '-') {
-    setBatchTiming(batch, { startTime: state.currentInAt })
-  }
+  stationInRecords.unshift({
+    Id: Date.now(),
+    LotId: batch.Id,
+    RouteStepId: process.RouteStepId,
+    Round: 1,
+    EquipmentId: equipmentItem?.Id || null,
+    OperatorId: operator.Id,
+    StationInTime: stationInTime,
+    StationInQuantity: stationInQuantity,
+    Status: 1,
+    VerifyRemark: payload.VerifyRemark || payload.remark || '',
+    ...auditFields(stationInTime, '进站'),
+  })
+
+  if (!batch.StartTime) setBatchTiming(batch, { StartTime: stationInTime })
   setBatchStatus(batch, 'running')
 
-  pushBatchTrace(batchId, {
-    type: 'checkin',
-    step: batch.currentStep,
-    qty,
-    deviceId: state.currentDeviceId,
-    operator: state.currentOperator,
-    message: `${batch.currentStep} 已进站`,
-    time: state.currentInAt,
+  pushBatchTrace(batch.LotCode, {
+    EventType: 'checkin',
+    RouteStepId: process.RouteStepId,
+    Quantity: stationInQuantity,
+    EquipmentId: equipmentItem?.Id || null,
+    OperatorId: operator.Id,
+    Message: `${getCurrentOperationName(batch)} 已进站`,
+    EventTime: stationInTime,
   })
 
   return { ok: true, batch }
 }
 
-export function submitBatchCheckOut(batchId, payload) {
-  const batch = findBatch(batchId)
+export function submitBatchCheckOut(lotCode, payload) {
+  const batch = findBatch(lotCode)
   if (!batch) return { ok: false, message: '批次不存在。' }
 
-  const process = getCurrentProcess(batchId)
-  if (!process || process.status !== 'checked_in') {
-    return { ok: false, message: '当前工序不是已进站状态，不能出站。' }
-  }
+  const process = getCurrentProcess(batch)
+  if (!process || process.Status !== PROCESS_STATUS_CODE.checked_in) return { ok: false, message: '当前工序不是已进站状态，不能出站。' }
 
-  const state = ensureBatchExecutionState(batchId)
-  const isInspection = isInspectionProcess(batch.currentStep)
+  const state = ensureBatchExecutionState(batch.LotCode)
+  const operationName = getCurrentOperationName(batch)
+  const isInspection = isInspectionProcess(operationName)
+  const stationOutTime = payload.StationOutTime || payload.outAt || nowText()
+  const operator = findUser(payload.OperatorId || payload.operator) || users[2]
+
+  let finishedQuantity = 0
+  let defectQuantity = 0
+  let scrapQuantity = 0
+  let disposalType = payload.DisposalType || DISPOSAL_TYPE_CODE[payload.disposal] || null
+  let disposalRemark = payload.DisposalRemark || payload.remark || ''
+  let isNormal = 1
 
   if (isInspection) {
-    const passRate = Math.max(0, Math.min(100, Number(payload.passRate) || 0))
-    const threshold = getInspectionThreshold(batch.currentStep)
+    const passRate = Math.max(0, Math.min(100, Number(payload.SpiPassRate ?? payload.AoiPassRate ?? payload.passRate) || 0))
+    const threshold = getInspectionThreshold(operationName)
     const action = passRate >= threshold ? 'normal' : payload.qualityAction
 
     if (passRate < threshold && !['force', 'lock'].includes(action)) {
       return { ok: false, message: `检测通过率 ${passRate}% 低于阈值 ${threshold}%，请选择强制出站或批次锁定。` }
     }
-    if (passRate < threshold && action === 'force' && !String(payload.remark || '').trim()) {
-      return { ok: false, message: '请填写强制出站原因。' }
+    if (passRate < threshold && !String(disposalRemark || '').trim()) {
+      return { ok: false, message: action === 'lock' ? '请填写批次锁定原因。' : '请填写强制出站原因。' }
     }
-    if (passRate < threshold && action === 'lock' && !String(payload.remark || '').trim()) {
-      return { ok: false, message: '请填写批次锁定原因。' }
-    }
-
-    process.passRate = passRate
-    process.threshold = threshold
-    process.qualityAction = action
-    process.operator = payload.operator || process.operator
-    process.IsNormal = passRate >= threshold || action === 'force'
-    process.DisposalType = action === 'force' ? DISPOSAL_TYPE_CODE.force : null
-    process.DisposalRemark = payload.remark || ''
-    if (inspectionTypeByStep(batch.currentStep) === 'SPI') process.SpiPassRate = passRate
-    if (inspectionTypeByStep(batch.currentStep) === 'AOI') process.AoiPassRate = passRate
 
     if (passRate < threshold && action === 'lock') {
-      process.status = 'locked'
       process.Status = PROCESS_STATUS_CODE.locked
-      process.outAt = payload.outAt || nowText()
-      process.StationOutTime = process.outAt
+      process.StationOutTime = stationOutTime
       setBatchStatus(batch, 'locked')
-      batch.lockReason = payload.remark || `${batch.currentStep} 通过率 ${passRate}% 低于阈值 ${threshold}%`
-      batch.autoLocked = true
-      pushBatchTrace(batchId, {
-        type: 'quality',
-        step: batch.currentStep,
-        passRate,
-        threshold,
-        operator: payload.operator || '',
-        message: `${batch.currentStep} 通过率 ${passRate}% 低于阈值 ${threshold}%，批次已锁定，等待质量评审`,
-        time: process.outAt,
+      batchLockState[batch.LotCode] = {
+        ...(batchLockState[batch.LotCode] || {}),
+        LockReason: disposalRemark || `${operationName} 通过率 ${passRate}% 低于阈值 ${threshold}%`,
+        AutoLocked: true,
+      }
+      pushBatchTrace(batch.LotCode, {
+        EventType: 'quality',
+        RouteStepId: process.RouteStepId,
+        Message: `${operationName} 通过率 ${passRate}% 低于阈值 ${threshold}%，批次已锁定，等待质量评审`,
+        EventTime: stationOutTime,
+        OperatorId: operator.Id,
       })
-      return { ok: true, batch, nextStep: batch.currentStep, status: 'locked' }
+      return { ok: true, batch, nextStep: operationName, status: 'locked' }
     }
 
-    const outQty = state.currentInQty
-    process.status = 'checked_out'
-    process.Status = PROCESS_STATUS_CODE.checked_out
-    process.outAt = payload.outAt || nowText()
-    process.StationOutTime = process.outAt
-    process.goodQty = outQty
-    process.badQty = 0
-    process.scrapQty = 0
-    process.FinishedQuantity = outQty
-    process.DefectQuantity = 0
+    finishedQuantity = state.CurrentInQuantity
+    defectQuantity = 0
+    scrapQuantity = 0
+    disposalType = action === 'force' ? DISPOSAL_TYPE_CODE.force : null
+    isNormal = passRate >= threshold || action === 'force' ? 1 : 0
 
-    pushBatchTrace(batchId, {
-      type: 'checkout',
-      step: batch.currentStep,
-      qty: outQty,
-      passRate,
-      threshold,
-      operator: payload.operator || '',
-      message: passRate >= threshold
-        ? `${batch.currentStep} 通过率 ${passRate}% 达到阈值，正常出站`
-        : `${batch.currentStep} 通过率 ${passRate}% 低于阈值 ${threshold}%，已强制出站`,
-      time: process.outAt,
-    })
-
-    state.currentInQty = 0
-    state.currentDeviceId = ''
-    state.currentOperator = ''
-
-    const route = findBatchRoute(batch)
-    const stepIndex = route ? route.steps.findIndex((item) => item.step === batch.currentStep) : -1
-    const nextStep = route && stepIndex >= 0 && stepIndex < route.steps.length - 1 ? route.steps[stepIndex + 1].step : ''
-
-    if (nextStep) {
-      createProcessRecord(batch, nextStep, 'wait_in', outQty)
-      state.pendingQty = outQty
-      pushBatchTrace(batchId, {
-        type: 'status',
-        step: nextStep,
-        qty: outQty,
-        message: `流转至下一工序 ${nextStep}，等待进站`,
-        time: process.outAt,
-      })
-      return { ok: true, batch, nextStep, status: 'wait_in' }
-    }
-
-    batch.currentStep = '已下线'
-    setBatchStatus(batch, 'completed')
-    setBatchCompletedQuantity(batch, outQty)
-    setBatchTiming(batch, { endTime: process.outAt })
-    state.pendingQty = 0
-    pushBatchTrace(batchId, {
-      type: 'status',
-      step: '已下线',
-      qty: outQty,
-      message: '批次全部工序完成',
-      time: process.outAt,
-    })
-    return { ok: true, batch, nextStep: '', status: 'completed' }
-  }
-
-  const goodQty = Math.max(Number(payload.goodQty) || 0, 0)
-  const badQty = Math.max(Number(payload.badQty) || 0, 0)
-  const scrapQty = Math.max(Number(payload.scrapQty) || 0, 0)
-  const totalQty = goodQty + badQty + scrapQty
-  if (totalQty !== state.currentInQty) {
-    return { ok: false, message: `数量不匹配：进站数量 ${state.currentInQty}，出站合计 ${totalQty}。` }
-  }
-
-  setBatchCompletedQuantity(batch, goodQty)
-  batch.defective = badQty
-  batch.scrap = scrapQty
-
-  process.status = 'checked_out'
-  process.Status = PROCESS_STATUS_CODE.checked_out
-  process.outAt = payload.outAt || nowText()
-  process.StationOutTime = process.outAt
-  process.goodQty = goodQty
-  process.badQty = badQty
-  process.scrapQty = scrapQty
-  process.FinishedQuantity = goodQty
-  process.DefectQuantity = badQty
-  process.IsNormal = badQty === 0 && scrapQty === 0
-  process.DisposalType = payload.disposal ? DISPOSAL_TYPE_CODE[payload.disposal] : null
-  process.DisposalRemark = payload.remark || ''
-  process.operator = payload.operator || process.operator
-
-  pushBatchTrace(batchId, {
-    type: 'checkout',
-    step: batch.currentStep,
-    qty: totalQty,
-    goodQty,
-    badQty,
-    scrapQty,
-    operator: payload.operator || '',
-    message: `${batch.currentStep} 已出站`,
-    time: process.outAt,
-  })
-
-  state.currentInQty = 0
-  state.currentDeviceId = ''
-  state.currentOperator = ''
-
-  if (badQty > 0 && payload.disposal === 'repair') {
-    setBatchStatus(batch, 'repair')
-    repairTasks.unshift({
+    stationOutRecords.unshift({
+      Id: Date.now(),
       LotId: batch.Id,
       RouteStepId: process.RouteStepId,
-      Status: 0,
-      RepairQuantity: badQty,
+      Round: 1,
+      OperatorId: operator.Id,
+      StationOutTime: stationOutTime,
+      FinishedQuantity: finishedQuantity,
+      DefectQuantity: defectQuantity,
+      IsNormal: isNormal,
+      DisposalType: disposalType,
+      DisposalRemark: disposalRemark,
+      SpiPassRate: operationName.includes('SPI') ? passRate : null,
+      AoiPassRate: operationName.includes('AOI') ? passRate : null,
+      ...auditFields(stationOutTime, '检测出站'),
+    })
+  } else {
+    finishedQuantity = Math.max(Number(payload.FinishedQuantity ?? payload.goodQty) || 0, 0)
+    defectQuantity = Math.max(Number(payload.DefectQuantity ?? payload.badQty) || 0, 0)
+    if (defectQuantity > 0 && !disposalType) disposalType = DISPOSAL_TYPE_CODE.repair
+    scrapQuantity = disposalType === DISPOSAL_TYPE_CODE.scrap ? defectQuantity : 0
+    const totalQuantity = finishedQuantity + defectQuantity
+    if (totalQuantity !== state.CurrentInQuantity) {
+      return { ok: false, message: `数量不匹配：进站数量 ${state.CurrentInQuantity}，出站合计 ${totalQuantity}。` }
+    }
+    isNormal = defectQuantity === 0 ? 1 : 0
+
+    stationOutRecords.unshift({
+      Id: Date.now(),
+      LotId: batch.Id,
+      RouteStepId: process.RouteStepId,
+      Round: 1,
+      OperatorId: operator.Id,
+      StationOutTime: stationOutTime,
+      FinishedQuantity: finishedQuantity,
+      DefectQuantity: defectQuantity,
+      ScrapQuantity: scrapQuantity,
+      IsNormal: isNormal,
+      DisposalType: disposalType,
+      DisposalRemark: disposalRemark,
+      SpiPassRate: null,
+      AoiPassRate: null,
+      ...auditFields(stationOutTime, '出站'),
+    })
+  }
+
+  setBatchCompletedQuantity(batch, finishedQuantity)
+  process.Status = PROCESS_STATUS_CODE.checked_out
+  process.StationOutTime = stationOutTime
+  process.FinishedQuantity = finishedQuantity
+  process.DefectQuantity = defectQuantity
+  process.UpdatedAt = stationOutTime
+
+  pushBatchTrace(batch.LotCode, {
+    EventType: 'checkout',
+    RouteStepId: process.RouteStepId,
+    Quantity: finishedQuantity + defectQuantity,
+    FinishedQuantity: finishedQuantity,
+    DefectQuantity: defectQuantity,
+    ScrapQuantity: scrapQuantity,
+    OperatorId: operator.Id,
+    Message: `${operationName} 已出站`,
+    EventTime: stationOutTime,
+  })
+
+  state.CurrentInQuantity = 0
+  state.CurrentEquipmentId = null
+  state.CurrentOperatorId = null
+
+  if (defectQuantity > 0 && disposalType === DISPOSAL_TYPE_CODE.repair) {
+    setBatchStatus(batch, 'repair')
+    repairTasks.unshift({
+      Id: Date.now(),
+      LotId: batch.Id,
+      RouteStepId: process.RouteStepId,
+      Status: REPAIR_STATUS_CODE.pending,
+      RepairQuantity: defectQuantity,
       RepairedQuantity: 0,
       ScrapQuantity: 0,
-      RepairDescription: payload.remark || '待维修确认',
-      batchId: batch.id,
-      productModel: batch.productModel,
-      line: batch.line,
-      process: batch.currentStep,
-      badQty,
-      defect: payload.remark || '待维修确认',
-      reportedAt: process.outAt,
-      overdue: false,
-      status: '待维修',
+      RepairDescription: disposalRemark || '待维修确认',
+      RepairResult: null,
+      RepairBy: null,
+      RepairStartTime: null,
+      RepairEndTime: null,
+      ...auditFields(stationOutTime, '出站生成维修任务'),
     })
-    pushBatchTrace(batchId, {
-      type: 'repair',
-      step: batch.currentStep,
-      badQty,
-      message: `已生成维修任务，数量 ${badQty}`,
-      time: process.outAt,
+    pushBatchTrace(batch.LotCode, {
+      EventType: 'repair',
+      RouteStepId: process.RouteStepId,
+      DefectQuantity: defectQuantity,
+      Message: `已生成维修任务，数量 ${defectQuantity}`,
+      EventTime: stationOutTime,
     })
-    return { ok: true, batch, nextStep: batch.currentStep, status: 'repair' }
+    return { ok: true, batch, nextStep: operationName, status: 'repair' }
   }
 
-  const route = findBatchRoute(batch)
-  const stepIndex = route ? route.steps.findIndex((item) => item.step === batch.currentStep) : -1
-  const nextStep = route && stepIndex >= 0 && stepIndex < route.steps.length - 1 ? route.steps[stepIndex + 1].step : ''
+  const order = getBatchWorkOrder(batch)
+  const routeRows = getRouteStepRows(order?.RouteId)
+  const stepIndex = routeRows.findIndex((item) => item.Id === process.RouteStepId)
+  const nextStep = stepIndex >= 0 && stepIndex < routeRows.length - 1 ? routeRows[stepIndex + 1] : null
 
   if (nextStep) {
-    createProcessRecord(batch, nextStep, 'wait_in', goodQty)
-    state.pendingQty = goodQty
-    pushBatchTrace(batchId, {
-      type: 'status',
-      step: nextStep,
-      qty: goodQty,
-      message: `流转至下一工序 ${nextStep}，等待进站`,
-      time: process.outAt,
+    createProcessRecord(batch, nextStep, 'wait_in', finishedQuantity)
+    state.PendingQuantity = finishedQuantity
+    pushBatchTrace(batch.LotCode, {
+      EventType: 'status',
+      RouteStepId: nextStep.Id,
+      Quantity: finishedQuantity,
+      Message: `流转至下一工序 ${nextStep.OperationName}，等待进站`,
+      EventTime: stationOutTime,
     })
-    return { ok: true, batch, nextStep, status: 'wait_in' }
+    return { ok: true, batch, nextStep: nextStep.OperationName, status: 'wait_in' }
   }
 
-  batch.currentStep = '已下线'
   setBatchStatus(batch, 'completed')
-  setBatchTiming(batch, { endTime: process.outAt })
-  state.pendingQty = 0
-  pushBatchTrace(batchId, {
-    type: 'status',
-    step: '已下线',
-    qty: goodQty,
-    message: '批次全部工序完成',
-    time: process.outAt,
+  setBatchTiming(batch, { EndTime: stationOutTime })
+  state.PendingQuantity = 0
+  pushBatchTrace(batch.LotCode, {
+    EventType: 'status',
+    RouteStepId: process.RouteStepId,
+    Quantity: finishedQuantity,
+    Message: '批次全部工序完成',
+    EventTime: stationOutTime,
   })
   return { ok: true, batch, nextStep: '', status: 'completed' }
 }
 
-export function submitRepairResult(batchId, payload) {
-  const batch = findBatch(batchId)
+export function submitRepairResult(lotCode, payload) {
+  const batch = findBatch(lotCode)
   if (!batch) return { ok: false, message: '批次不存在。' }
 
-  const task = repairTasks.find((item) => item.batchId === batchId && item.status !== '已完成')
-  const state = ensureBatchExecutionState(batchId)
-  const repairQty = Math.max(Number(payload.repairQty) || 0, 0)
-  const scrapQty = Math.max(Number(payload.scrapQty) || 0, 0)
+  const task = repairTasks.find((item) => item.LotId === batch.Id && item.Status !== REPAIR_STATUS_CODE.completed)
+  const state = ensureBatchExecutionState(batch.LotCode)
+  const repairedQuantity = Math.max(Number(payload.RepairedQuantity ?? payload.repairQty) || 0, 0)
+  const scrapQuantity = Math.max(Number(payload.ScrapQuantity ?? payload.scrapQty) || 0, 0)
+  const completedAt = payload.RepairEndTime || payload.completedAt || nowText()
+  const repairBy = findUser(payload.RepairBy || payload.handler) || users[3]
 
   if (task) {
-    task.status = '已完成'
-    task.Status = 2
-    task.result = payload.result
-    task.RepairResult = payload.result === 'repair_pass' ? 1 : 2
-    task.RepairedQuantity = repairQty
-    task.ScrapQuantity = scrapQty
-    task.completedAt = payload.completedAt || nowText()
-    task.RepairEndTime = task.completedAt
+    task.Status = REPAIR_STATUS_CODE.completed
+    task.RepairResult = payload.RepairResult || (payload.result === 'repair_pass' ? 1 : 2)
+    task.RepairedQuantity = repairedQuantity
+    task.ScrapQuantity = scrapQuantity
+    task.RepairBy = repairBy.Id
+    task.RepairEndTime = completedAt
+    task.UpdatedAt = completedAt
   }
 
-  if (payload.result === 'repair_pass') {
+  if (payload.result === 'repair_pass' || payload.RepairResult === 1) {
     setBatchStatus(batch, 'running')
-    state.pendingQty = repairQty
-    const process = getCurrentProcess(batchId)
-    if (process) process.status = 'wait_in'
-    pushBatchTrace(batchId, {
-      type: 'repair',
-      step: batch.currentStep,
-      qty: repairQty,
-      message: `维修完成，返回 ${batch.currentStep} 待进站`,
-      time: payload.completedAt || nowText(),
+    state.PendingQuantity = repairedQuantity
+    const process = getCurrentProcess(batch)
+    if (process) process.Status = PROCESS_STATUS_CODE.wait_in
+    pushBatchTrace(batch.LotCode, {
+      EventType: 'repair',
+      RouteStepId: process?.RouteStepId || null,
+      Quantity: repairedQuantity,
+      Message: `维修完成，返回 ${getCurrentOperationName(batch)} 待进站`,
+      EventTime: completedAt,
     })
     return { ok: true, batch, status: 'wait_in' }
   }
 
-  batch.scrap += scrapQty
   setBatchStatus(batch, 'completed')
-  state.pendingQty = 0
-  pushBatchTrace(batchId, {
-    type: 'repair',
-    step: batch.currentStep,
-    scrapQty,
-    message: '维修结束，批次关闭',
-    time: payload.completedAt || nowText(),
+  state.PendingQuantity = 0
+  pushBatchTrace(batch.LotCode, {
+    EventType: 'repair',
+    RouteStepId: getCurrentProcess(batch)?.RouteStepId || null,
+    ScrapQuantity: scrapQuantity,
+    Message: '维修结束，批次关闭',
+    EventTime: completedAt,
   })
   return { ok: true, batch, status: 'completed' }
+}
+
+export function getInspectionThreshold(operationName = '') {
+  const product = products[0]
+  if (operationName.includes('SPI')) return product?.SpiThreshold ?? 97
+  if (operationName.includes('AOI')) return product?.AoiThreshold ?? 96
+  return 0
+}
+
+export function inspectionTypeByStep(operationName = '') {
+  if (operationName.includes('SPI')) return 'SPI'
+  if (operationName.includes('AOI')) return 'AOI'
+  return ''
+}
+
+export function isInspectionProcess(operationName = '') {
+  return Boolean(inspectionTypeByStep(operationName))
+}
+
+export function getBatchTrace(lotCode) {
+  return ensureBatchTraceState(lotCode).map((item) => {
+    const routeStep = findRouteStep(item.RouteStepId)
+    const operation = findOperation(routeStep?.OperationId)
+    const equipmentItem = findEquipment(item.EquipmentId)
+    const operator = findUser(item.OperatorId)
+    return {
+      ...item,
+      OperationName: operation?.OperationName || '-',
+      EquipmentCode: equipmentItem?.EquipmentCode || '',
+      OperatorName: operator?.FullName || '',
+    }
+  })
 }

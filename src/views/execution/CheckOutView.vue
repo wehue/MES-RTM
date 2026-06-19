@@ -5,64 +5,105 @@ import { ElMessage } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { BATCH_STATUS, statusMeta } from '@/utils/constants'
-import { batches, batchExecutionState, getCurrentProcessStatus, getInspectionThreshold, isInspectionProcess, submitBatchCheckOut } from '@/utils/mockData'
+import {
+  BATCH_STATUS_CODE,
+  DISPOSAL_TYPE_CODE,
+  PROCESS_STATUS_CODE,
+  batches,
+  batchExecutionState,
+  findUser,
+  getBatchDefectQuantity,
+  getBatchProduct,
+  getBatchScrapQuantity,
+  getBatchWorkOrder,
+  getCurrentOperationName,
+  getCurrentProcessStatus,
+  getInspectionThreshold,
+  getUserOptionLabel,
+  isInspectionProcess,
+  submitBatchCheckOut,
+  users,
+} from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
 const form = reactive({
-  batchId: '',
-  goodQty: 0,
-  badQty: 0,
-  scrapQty: 0,
-  passRate: 100,
-  qualityAction: 'normal',
-  disposal: 'repair',
-  forceReason: '',
-  operator: userStore.userInfo.name || '张工',
-  remark: '',
+  LotCode: '',
+  FinishedQuantity: 0,
+  DefectQuantity: 0,
+  PassRate: 100,
+  QualityAction: 'normal',
+  DisposalType: DISPOSAL_TYPE_CODE.repair,
+  ForceReason: '',
+  OperatorId: findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3,
+  DisposalRemark: '',
 })
 
-const availableBatches = computed(() => batches.filter((item) => getCurrentProcessStatus(item.id) === 'checked_in'))
-const batch = computed(() => availableBatches.value.find((item) => item.id === form.batchId) || availableBatches.value[0] || null)
+const availableBatches = computed(() => batches.filter((item) => getCurrentProcessStatus(item.LotCode) === PROCESS_STATUS_CODE.checked_in))
+const batch = computed(() => availableBatches.value.find((item) => item.LotCode === form.LotCode) || availableBatches.value[0] || null)
 const canForce = computed(() => userStore.hasAnyRole(['production_manager']))
-const isLocked = computed(() => batch.value?.status === 'locked')
-const currentInQty = computed(() => batch.value ? (batchExecutionState[batch.value.id]?.currentInQty || batch.value.completed + batch.value.defective + batch.value.scrap) : 0)
-const isInspection = computed(() => batch.value ? isInspectionProcess(batch.value.currentStep) : false)
-const inspectionThreshold = computed(() => batch.value ? getInspectionThreshold(batch.value.currentStep) : 0)
-const inspectionPass = computed(() => form.passRate >= inspectionThreshold.value)
-const quantityValid = computed(() => form.goodQty + form.badQty + form.scrapQty === currentInQty.value)
+const isLocked = computed(() => batch.value?.Status === BATCH_STATUS_CODE.locked)
+const currentInQty = computed(() => batch.value ? (batchExecutionState[batch.value.LotCode]?.CurrentInQuantity || batch.value.CompletedQuantity + getBatchDefectQuantity(batch.value) + getBatchScrapQuantity(batch.value)) : 0)
+const currentOperationName = computed(() => batch.value ? getCurrentOperationName(batch.value) : '-')
+const isInspection = computed(() => batch.value ? isInspectionProcess(currentOperationName.value) : false)
+const inspectionThreshold = computed(() => batch.value ? getInspectionThreshold(currentOperationName.value) : 0)
+const inspectionPass = computed(() => form.PassRate >= inspectionThreshold.value)
+const checkoutTotal = computed(() => form.FinishedQuantity + form.DefectQuantity)
+const quantityValid = computed(() => checkoutTotal.value === currentInQty.value)
 
 watch(batch, (current) => {
   if (!current) {
-    form.batchId = ''
-    form.goodQty = 0
-    form.badQty = 0
-    form.scrapQty = 0
-    form.passRate = 100
-    form.qualityAction = 'normal'
-    form.forceReason = ''
+    Object.assign(form, {
+      LotCode: '',
+      FinishedQuantity: 0,
+      DefectQuantity: 0,
+      PassRate: 100,
+      QualityAction: 'normal',
+      ForceReason: '',
+    })
     return
   }
-  form.batchId = current.id
-  form.goodQty = current.completed
-  form.badQty = current.defective
-  form.scrapQty = current.scrap
-  form.passRate = currentInQty.value ? Number(((current.completed / currentInQty.value) * 100).toFixed(1)) : 100
-  form.qualityAction = 'normal'
-  form.disposal = current.defective > 0 ? 'repair' : 'scrap'
-  form.forceReason = ''
+  form.LotCode = current.LotCode
+  form.FinishedQuantity = currentInQty.value
+  form.DefectQuantity = 0
+  form.PassRate = 100
+  form.QualityAction = 'normal'
+  form.DisposalType = DISPOSAL_TYPE_CODE.repair
+  form.ForceReason = ''
 }, { immediate: true })
 
 watch(inspectionPass, (pass) => {
-  if (pass) {
-    form.qualityAction = 'normal'
-  }
+  if (pass) form.QualityAction = 'normal'
 })
 
 function selectBatch(row) {
-  if (!row?.id) return
-  form.batchId = row.id
+  if (!row?.LotCode) return
+  form.LotCode = row.LotCode
+}
+
+function clampQuantity(value) {
+  return Math.max(0, Math.min(Number(value) || 0, currentInQty.value))
+}
+
+function syncFinishedQuantity(value) {
+  const finishedQuantity = clampQuantity(value)
+  form.FinishedQuantity = finishedQuantity
+  form.DefectQuantity = currentInQty.value - finishedQuantity
+  if (form.DefectQuantity === 0) {
+    form.DisposalType = DISPOSAL_TYPE_CODE.repair
+    form.ForceReason = ''
+  }
+}
+
+function syncDefectQuantity(value) {
+  const defectQuantity = clampQuantity(value)
+  form.DefectQuantity = defectQuantity
+  form.FinishedQuantity = currentInQty.value - defectQuantity
+  if (defectQuantity === 0) {
+    form.DisposalType = DISPOSAL_TYPE_CODE.repair
+    form.ForceReason = ''
+  }
 }
 
 function submit() {
@@ -71,44 +112,44 @@ function submit() {
     return
   }
   if (isLocked.value) {
-    ElMessage.error(`批次已锁定：${batch.value.lockReason}`)
+    ElMessage.error('批次已锁定')
     return
   }
   if (!isInspection.value && !quantityValid.value) {
-    ElMessage.error(`数量不匹配：进站数量 ${currentInQty.value}，出站合计 ${form.goodQty + form.badQty + form.scrapQty}`)
+    ElMessage.error(`数量不匹配：进站数量 ${currentInQty.value}，出站合计 ${checkoutTotal.value}`)
     return
   }
-  if (!isInspection.value && form.disposal === 'force' && !canForce.value) {
+  if (!isInspection.value && form.DefectQuantity > 0 && form.DisposalType === DISPOSAL_TYPE_CODE.force && !canForce.value) {
     ElMessage.error('当前角色没有强制出站权限')
     return
   }
-  if (!isInspection.value && form.disposal === 'force' && !form.forceReason.trim()) {
+  if (!isInspection.value && form.DefectQuantity > 0 && form.DisposalType === DISPOSAL_TYPE_CODE.force && !form.ForceReason.trim()) {
     ElMessage.error('请填写强制出站原因')
     return
   }
-  if (isInspection.value && !inspectionPass.value && !['force', 'lock'].includes(form.qualityAction)) {
+  if (isInspection.value && !inspectionPass.value && !['force', 'lock'].includes(form.QualityAction)) {
     ElMessage.error('检测通过率低于阈值，请选择强制出站或批次锁定')
     return
   }
-  if (isInspection.value && !inspectionPass.value && form.qualityAction === 'force' && !canForce.value) {
+  if (isInspection.value && !inspectionPass.value && form.QualityAction === 'force' && !canForce.value) {
     ElMessage.error('当前角色没有强制出站权限')
     return
   }
-  if (isInspection.value && !inspectionPass.value && !form.forceReason.trim()) {
-    ElMessage.error(form.qualityAction === 'lock' ? '请填写批次锁定原因' : '请填写强制出站原因')
+  if (isInspection.value && !inspectionPass.value && !form.ForceReason.trim()) {
+    ElMessage.error(form.QualityAction === 'lock' ? '请填写批次锁定原因' : '请填写强制出站原因')
     return
   }
 
-  const result = submitBatchCheckOut(form.batchId, {
-    goodQty: form.goodQty,
-    badQty: form.badQty,
-    scrapQty: form.scrapQty,
-    passRate: form.passRate,
-    qualityAction: form.qualityAction,
-    disposal: form.disposal,
-    operator: form.operator,
-    remark: form.remark || form.forceReason,
-    outAt: '2026-05-20 15:00',
+  const result = submitBatchCheckOut(form.LotCode, {
+    FinishedQuantity: form.FinishedQuantity,
+    DefectQuantity: form.DefectQuantity,
+    SpiPassRate: currentOperationName.value.includes('SPI') ? form.PassRate : null,
+    AoiPassRate: currentOperationName.value.includes('AOI') ? form.PassRate : null,
+    qualityAction: form.QualityAction,
+    DisposalType: form.DisposalType,
+    OperatorId: Number(form.OperatorId),
+    DisposalRemark: form.DisposalRemark || form.ForceReason,
+    StationOutTime: '2026-05-20 15:00',
   })
 
   if (!result.ok) {
@@ -129,7 +170,7 @@ function submit() {
     router.push({
       path: '/execution/check-in',
       query: {
-        batchId: result.batch.id,
+        LotCode: result.batch.LotCode,
       },
     })
     return
@@ -144,7 +185,7 @@ function submit() {
     <div class="page-header">
       <div>
         <h1 class="page-title">出站操作</h1>
-        <p class="page-subtitle">选择当前工序已完成的批次，普通工序确认数量，SPI / AOI 检测工序按通过率和阈值执行出站或锁定。</p>
+        <p class="page-subtitle">按 smt_station_out_records 字段提交出站，普通工序确认数量，SPI / AOI 按通过率和阈值处理。</p>
       </div>
     </div>
 
@@ -154,23 +195,31 @@ function submit() {
           :data="availableBatches"
           border
           highlight-current-row
-          row-key="id"
-          :current-row-key="form.batchId"
+          row-key="LotCode"
+          :current-row-key="form.LotCode"
           @current-change="selectBatch"
           @row-click="selectBatch"
         >
-          <el-table-column prop="id" label="批次号" min-width="160" />
-          <el-table-column prop="workOrderId" label="工单号" min-width="160" />
-          <el-table-column prop="productModel" label="产品型号" min-width="150" />
-          <el-table-column prop="currentStep" label="当前工序" min-width="120" />
-          <el-table-column label="进站数量" width="100">
-            <template #default="{ row }">{{ batchExecutionState[row.id]?.currentInQty || row.completed + row.defective + row.scrap }}</template>
+          <el-table-column prop="LotCode" label="批次号" min-width="160" />
+          <el-table-column label="工单号" min-width="160">
+            <template #default="{ row }">{{ getBatchWorkOrder(row)?.WorkOrderCode || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="completed" label="良品" width="90" />
-          <el-table-column prop="defective" label="不良" width="90" />
+          <el-table-column label="产品型号" min-width="150">
+            <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="当前工序" min-width="120">
+            <template #default="{ row }">{{ getCurrentOperationName(row) }}</template>
+          </el-table-column>
+          <el-table-column label="进站数量" width="100">
+            <template #default="{ row }">{{ batchExecutionState[row.LotCode]?.CurrentInQuantity || row.CompletedQuantity + getBatchDefectQuantity(row) + getBatchScrapQuantity(row) }}</template>
+          </el-table-column>
+          <el-table-column prop="CompletedQuantity" label="良品" width="90" />
+          <el-table-column label="不良" width="90">
+            <template #default="{ row }">{{ getBatchDefectQuantity(row) }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
-              <StatusTag :meta="statusMeta(BATCH_STATUS, row.status)" />
+              <StatusTag :meta="statusMeta(BATCH_STATUS, row.Status)" />
             </template>
           </el-table-column>
         </el-table>
@@ -179,27 +228,27 @@ function submit() {
       <SectionCard v-if="batch" class="span-12" title="批次与出站信息">
         <el-form label-position="top">
           <el-form-item label="选择批次">
-            <el-select v-model="form.batchId" filterable class="full">
-              <el-option v-for="item in availableBatches" :key="item.id" :label="item.id" :value="item.id" />
+            <el-select v-model="form.LotCode" filterable class="full">
+              <el-option v-for="item in availableBatches" :key="item.LotCode" :label="item.LotCode" :value="item.LotCode" />
             </el-select>
           </el-form-item>
         </el-form>
-        <el-alert v-if="isLocked" :title="`批次已锁定：${batch.lockReason}`" type="error" show-icon :closable="false" />
+        <el-alert v-if="isLocked" title="批次已锁定" type="error" show-icon :closable="false" />
         <el-descriptions :column="1" border style="margin-top: 10px">
-          <el-descriptions-item label="批次号">{{ batch.id }}</el-descriptions-item>
-          <el-descriptions-item label="产品型号">{{ batch.productModel }}</el-descriptions-item>
-          <el-descriptions-item label="当前工序">{{ batch.currentStep }}</el-descriptions-item>
+          <el-descriptions-item label="批次号">{{ batch.LotCode }}</el-descriptions-item>
+          <el-descriptions-item label="产品型号">{{ getBatchProduct(batch)?.Model }}</el-descriptions-item>
+          <el-descriptions-item label="当前工序">{{ currentOperationName }}</el-descriptions-item>
           <el-descriptions-item label="进站数量">{{ currentInQty }}</el-descriptions-item>
           <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
           <el-descriptions-item label="批次状态">
-            <StatusTag :meta="statusMeta(BATCH_STATUS, batch.status)" />
+            <StatusTag :meta="statusMeta(BATCH_STATUS, batch.Status)" />
           </el-descriptions-item>
         </el-descriptions>
 
         <el-alert
           v-if="!isInspection"
           style="margin-top: 12px"
-          :title="quantityValid ? '数量关系校验通过：进站数量 = 良品 + 不良 + 报废。' : `数量关系校验失败：进站数量 ${currentInQty}，出站合计 ${form.goodQty + form.badQty + form.scrapQty}。`"
+          :title="quantityValid ? '数量关系校验通过：进站数量 = 良品 + 不良。' : `数量关系校验失败：进站数量 ${currentInQty}，出站合计 ${checkoutTotal}。`"
           :type="quantityValid ? 'success' : 'error'"
           show-icon
           :closable="false"
@@ -207,47 +256,58 @@ function submit() {
         <el-alert
           v-else
           style="margin-top: 12px"
-          :title="inspectionPass ? `检测通过率 ${form.passRate}% 达到阈值 ${inspectionThreshold}%，可正常出站。` : `检测通过率 ${form.passRate}% 低于阈值 ${inspectionThreshold}%，请选择强制出站或批次锁定。`"
+          :title="inspectionPass ? `检测通过率 ${form.PassRate}% 达到阈值 ${inspectionThreshold}%，可正常出站。` : `检测通过率 ${form.PassRate}% 低于阈值 ${inspectionThreshold}%，请选择强制出站或批次锁定。`"
           :type="inspectionPass ? 'success' : 'error'"
           show-icon
           :closable="false"
         />
 
-        <el-form v-if="!isInspection" :model="form" label-width="100px" class="checkout-form">
-          <el-form-item label="良品数量"><el-input-number v-model="form.goodQty" :min="0" /></el-form-item>
-          <el-form-item label="不良数量"><el-input-number v-model="form.badQty" :min="0" /></el-form-item>
-          <el-form-item label="报废数量"><el-input-number v-model="form.scrapQty" :min="0" /></el-form-item>
-          <el-form-item v-if="form.badQty > 0" label="不良处置">
-            <el-select v-model="form.disposal" class="full">
-              <el-option label="维修" value="repair" />
-              <el-option label="报废" value="scrap" />
-              <el-option label="强制出站" value="force" />
+        <el-form v-if="!isInspection" :model="form" label-width="110px" class="checkout-form">
+          <el-form-item label="良品数量">
+            <el-input-number :model-value="form.FinishedQuantity" :min="0" :max="currentInQty" @update:model-value="syncFinishedQuantity" />
+          </el-form-item>
+          <el-form-item label="不良数量">
+            <el-input-number :model-value="form.DefectQuantity" :min="0" :max="currentInQty" @update:model-value="syncDefectQuantity" />
+          </el-form-item>
+          <el-form-item v-if="form.DefectQuantity > 0" label="不良处置">
+            <el-select v-model="form.DisposalType" class="full">
+              <el-option label="维修" :value="DISPOSAL_TYPE_CODE.repair" />
+              <el-option label="报废" :value="DISPOSAL_TYPE_CODE.scrap" />
+              <el-option label="强制出站" :value="DISPOSAL_TYPE_CODE.force" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="form.disposal === 'force'" label="强制原因">
-            <el-input v-model="form.forceReason" type="textarea" />
+          <el-form-item v-if="form.DisposalType === DISPOSAL_TYPE_CODE.force" label="强制原因">
+            <el-input v-model="form.ForceReason" type="textarea" />
           </el-form-item>
-          <el-form-item label="操作人"><el-input v-model="form.operator" /></el-form-item>
-          <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item>
+          <el-form-item label="操作人">
+            <el-select v-model="form.OperatorId" filterable placeholder="请选择操作人" class="full">
+              <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>
           <el-button type="primary" size="large" class="big-action" @click="submit">提交出站</el-button>
         </el-form>
 
         <el-form v-else :model="form" label-width="120px" class="checkout-form">
           <el-form-item label="检测通过率">
-            <el-input-number v-model="form.passRate" :min="0" :max="100" :precision="1" :step="0.1" />
+            <el-input-number v-model="form.PassRate" :min="0" :max="100" :precision="1" :step="0.1" />
           </el-form-item>
           <el-form-item label="出站处理">
-            <el-radio-group v-model="form.qualityAction" :disabled="inspectionPass">
+            <el-radio-group v-model="form.QualityAction" :disabled="inspectionPass">
               <el-radio-button label="normal">正常出站</el-radio-button>
               <el-radio-button label="force">强制出站</el-radio-button>
               <el-radio-button label="lock">批次锁定</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item v-if="!inspectionPass && form.qualityAction !== 'normal'" :label="form.qualityAction === 'lock' ? '锁定原因' : '强制原因'">
-            <el-input v-model="form.forceReason" type="textarea" />
+          <el-form-item v-if="!inspectionPass && form.QualityAction !== 'normal'" :label="form.QualityAction === 'lock' ? '锁定原因' : '强制原因'">
+            <el-input v-model="form.ForceReason" type="textarea" />
           </el-form-item>
-          <el-form-item label="操作人"><el-input v-model="form.operator" /></el-form-item>
-          <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item>
+          <el-form-item label="操作人">
+            <el-select v-model="form.OperatorId" filterable placeholder="请选择操作人" class="full">
+              <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>
           <el-button type="primary" size="large" class="big-action" @click="submit">提交出站</el-button>
         </el-form>
       </SectionCard>
