@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
 import {
   PROCESS_STATUS_CODE,
+  VERIFY_STATUS_CODE,
   batches,
   fillBatchMaterial,
   findUser,
@@ -36,6 +37,15 @@ const currentBatch = computed(() => availableBatches.value.find((item) => item.L
 const tasks = computed(() => currentBatch.value ? getBatchLoadingTasks(currentBatch.value.LotCode) : [])
 const progress = computed(() => currentBatch.value ? getBatchLoadingSummary(currentBatch.value.LotCode).Percentage : 0)
 const loadingValidation = computed(() => currentBatch.value ? validateBatchLoading(currentBatch.value.LotCode) : { pass: false, missing: [], message: '暂无待上料批次' })
+const bomVerifyStatus = computed(() => {
+  if (!tasks.value.length || tasks.value.some((item) => item.VerifyStatus === VERIFY_STATUS_CODE.pending)) {
+    return { label: '未校验', type: 'info' }
+  }
+  if (tasks.value.some((item) => item.VerifyStatus === VERIFY_STATUS_CODE.failed)) {
+    return { label: '校验失败', type: 'danger' }
+  }
+  return { label: '校验通过', type: 'success' }
+})
 const selectedTask = computed(() => tasks.value.find((item) => item.StationCode === form.StationCode) || tasks.value[0] || null)
 const recentLoadingRecords = computed(() =>
   tasks.value
@@ -82,8 +92,14 @@ async function submitLoading() {
 
 function autoFillTask(task) {
   form.StationCode = task.StationCode
-  form.MaterialCode = ''
+  form.MaterialCode = task.MaterialCode || ''
   form.ActualQuantity = Math.max(task.RequiredQuantity - task.LoadedQuantity, 0)
+}
+
+function verifyStatusMeta(status) {
+  if (status === VERIFY_STATUS_CODE.passed) return { label: '校验通过', type: 'success' }
+  if (status === VERIFY_STATUS_CODE.failed) return { label: '校验失败', type: 'danger' }
+  return { label: '未校验', type: 'info' }
 }
 </script>
 
@@ -106,13 +122,13 @@ function autoFillTask(task) {
           <el-table-column label="工单号" min-width="180">
             <template #default="{ row }">{{ getBatchWorkOrder(row)?.WorkOrderCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号" min-width="160">
-            <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
+          <el-table-column label="产品名称" min-width="180">
+            <template #default="{ row }">{{ getBatchProduct(row)?.ProductName || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产线" width="100" align="center">
+          <el-table-column label="产线" width="180" align="center">
             <template #default="{ row }">{{ getBatchLine(row)?.LineCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="上料完成率" width="120" align="center">
+          <el-table-column label="上料完成率" width="180" align="center">
             <template #default="{ row }">{{ getBatchLoadingSummary(row.LotCode).Percentage }}%</template>
           </el-table-column>
         </el-table>
@@ -122,10 +138,10 @@ function autoFillTask(task) {
         <SectionCard class="span-12" title="批次概览">
           <el-descriptions :column="1" border>
             <el-descriptions-item label="当前批次">{{ currentBatch.LotCode }}</el-descriptions-item>
-            <el-descriptions-item label="产品型号">{{ getBatchProduct(currentBatch)?.Model }}</el-descriptions-item>
+            <el-descriptions-item label="产品名称">{{ getBatchProduct(currentBatch)?.ProductName }}</el-descriptions-item>
             <el-descriptions-item label="当前工序">{{ getCurrentOperationName(currentBatch) }}</el-descriptions-item>
             <el-descriptions-item label="BOM 校验结果">
-              <el-tag :type="loadingValidation.pass ? 'success' : 'warning'">{{ loadingValidation.pass ? '齐套' : '待补料' }}</el-tag>
+              <el-tag :type="bomVerifyStatus.type">{{ bomVerifyStatus.label }}</el-tag>
             </el-descriptions-item>
           </el-descriptions>
 
@@ -141,19 +157,18 @@ function autoFillTask(task) {
           subtitle="由 BOM 明细和上料记录组合生成，非独立数据库表字段"
         >
           <el-table :data="tasks" border :row-class-name="({ row }) => row.LoadedQuantity < row.RequiredQuantity ? 'warning-row' : ''" @row-click="autoFillTask">
-            <el-table-column prop="StationCode" label="站位号" width="88" align="center" />
-            <el-table-column prop="MaterialCode" label="物料料号" min-width="130" />
-            <el-table-column prop="MaterialDesc" label="物料规格" min-width="160" />
-            <el-table-column prop="PackageType" label="封装" width="88" align="center" />
-            <el-table-column prop="RequiredQuantity" label="应上数量" width="96" align="center" />
+            <el-table-column prop="MaterialCode" label="元件料号" min-width="130" />
+            <el-table-column prop="PackageType" label="BOM封装类型" min-width="110" />
+            <el-table-column prop="MaterialPackageType" label="物料封装类型" min-width="120" />
+            <el-table-column prop="Brand" label="品牌" min-width="100" />
+            <el-table-column prop="RequiredQuantity" label="单板用量" width="96" align="center" />
             <el-table-column prop="LoadedQuantity" label="已上数量" width="96" align="center" />
             <el-table-column label="待补数量" width="96" align="center">
               <template #default="{ row }">{{ Math.max(row.RequiredQuantity - row.LoadedQuantity, 0) }}</template>
             </el-table-column>
-            <el-table-column prop="SubstituteMaterialCodes" label="替代料信息" min-width="130" />
-            <el-table-column label="上料状态" width="104" align="center">
+            <el-table-column label="状态" width="104" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.LoadedQuantity >= row.RequiredQuantity ? 'success' : 'warning'">{{ row.LoadedQuantity >= row.RequiredQuantity ? '已齐套' : '待补料' }}</el-tag>
+                <el-tag :type="verifyStatusMeta(row.VerifyStatus).type">{{ verifyStatusMeta(row.VerifyStatus).label }}</el-tag>
               </template>
             </el-table-column>
           </el-table>
@@ -163,8 +178,8 @@ function autoFillTask(task) {
           <el-empty v-if="!selectedTask" description="请先选择一个待补料站位" />
           <template v-else>
             <el-form label-position="top" class="supply-form">
-              <el-form-item label="补充物料条码">
-                <el-input v-model="form.MaterialCode" size="large" :placeholder="`例如：${selectedTask.MaterialCode}#LOT20260520-01`" />
+              <el-form-item label="元件料号">
+                <el-input v-model="form.MaterialCode" size="large" :placeholder="selectedTask.MaterialCode" />
               </el-form-item>
               <el-form-item label="补充数量">
                 <el-input-number v-model="form.ActualQuantity" size="large" :min="0" :max="Math.max(selectedTask.RequiredQuantity - selectedTask.LoadedQuantity, 0)" />
@@ -183,9 +198,7 @@ function autoFillTask(task) {
               <div class="record-title">最近补料记录</div>
               <el-empty v-if="!recentLoadingRecords.length" description="暂无补料记录" />
               <el-table v-else :data="recentLoadingRecords" border size="small">
-                <el-table-column prop="StationCode" label="站位" width="80" align="center" />
-                <el-table-column prop="BomMaterialCode" label="BOM 物料" min-width="140" />
-                <el-table-column prop="MaterialId" label="物料ID" min-width="90" />
+                <el-table-column prop="BomMaterialCode" label="元件料号" min-width="160" />
                 <el-table-column prop="ActualQuantity" label="补充数量" width="96" align="center" />
                 <el-table-column label="操作人" width="150" align="center">
                   <template #default="{ row }">{{ getUserDisplayName(row.OperatorId) }}</template>

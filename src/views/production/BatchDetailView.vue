@@ -25,6 +25,18 @@ const product = computed(() => getBatchProduct(batch.value))
 const line = computed(() => getBatchLine(batch.value))
 const loadingTasks = computed(() => getBatchLoadingTasks(batch.value.LotCode))
 const traces = computed(() => getBatchTrace(batch.value.LotCode))
+
+function verifyStatusText(status) {
+  if (status === 1) return '校验通过'
+  if (status === 2) return '校验失败'
+  return '未校验'
+}
+
+function verifyStatusType(status) {
+  if (status === 1) return 'success'
+  if (status === 2) return 'danger'
+  return 'info'
+}
 </script>
 
 <template>
@@ -71,12 +83,16 @@ const traces = computed(() => getBatchTrace(batch.value.LotCode))
 
     <SectionCard title="当前工序上料">
       <el-table :data="loadingTasks" border size="small">
-        <el-table-column prop="StationCode" label="站位" />
-        <el-table-column prop="MaterialCode" label="物料" />
-        <el-table-column prop="RequiredQuantity" label="应上数量" />
+        <el-table-column prop="MaterialCode" label="元件料号" />
+        <el-table-column prop="PackageType" label="BOM封装类型" />
+        <el-table-column prop="MaterialPackageType" label="物料封装类型" />
+        <el-table-column prop="Brand" label="品牌" />
+        <el-table-column prop="RequiredQuantity" label="单板用量" />
         <el-table-column prop="LoadedQuantity" label="已上数量" />
         <el-table-column label="状态">
-          <template #default="{ row }">{{ row.LoadedQuantity >= row.RequiredQuantity ? '已齐套' : '待补料' }}</template>
+          <template #default="{ row }">
+            <el-tag :type="verifyStatusType(row.VerifyStatus)">{{ verifyStatusText(row.VerifyStatus) }}</el-tag>
+          </template>
         </el-table-column>
       </el-table>
     </SectionCard>

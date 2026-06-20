@@ -149,19 +149,14 @@ function submit() {
           <el-table-column label="工单号" min-width="160">
             <template #default="{ row }">{{ getBatchWorkOrder(row)?.WorkOrderCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号" min-width="150">
-            <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
+          <el-table-column label="产品名称" min-width="150">
+            <template #default="{ row }">{{ getBatchProduct(row)?.ProductName || '-' }}</template>
           </el-table-column>
           <el-table-column label="产线" width="100">
             <template #default="{ row }">{{ getBatchLine(row)?.LineCode || '-' }}</template>
           </el-table-column>
           <el-table-column label="待进站数量" width="120">
             <template #default="{ row }">{{ getBatchPendingQty(row.LotCode) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="{ row }">
-              <StatusTag :meta="statusMeta(PROCESS_STATUS, getCurrentProcessStatus(row.LotCode))" />
-            </template>
           </el-table-column>
         </el-table>
       </SectionCard>
@@ -175,7 +170,7 @@ function submit() {
               </el-select>
             </el-form-item>
             <el-descriptions :column="1" border>
-              <el-descriptions-item label="产品型号">{{ getBatchProduct(currentBatch)?.Model }}</el-descriptions-item>
+              <el-descriptions-item label="产品名称">{{ getBatchProduct(currentBatch)?.ProductName }}</el-descriptions-item>
               <el-descriptions-item label="计划数量">{{ currentBatch.PlannedQuantity }}</el-descriptions-item>
               <el-descriptions-item label="待进站数量">{{ getBatchPendingQty(currentBatch.LotCode) }}</el-descriptions-item>
               <el-descriptions-item label="当前工序">{{ getCurrentOperationName(currentBatch) }}</el-descriptions-item>
@@ -208,7 +203,7 @@ function submit() {
           />
 
           <el-form :model="form" label-width="106px" class="operation-form">
-            <el-form-item label="设备ID">
+            <el-form-item label="设备名称">
               <el-select v-model="form.EquipmentId" placeholder="扫描或选择设备" class="full">
                 <el-option
                   v-for="device in availableDevices"

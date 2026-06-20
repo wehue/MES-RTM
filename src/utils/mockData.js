@@ -688,6 +688,7 @@ export function getBatchLoadingTasks(lotCode) {
         .sort((a, b) => String(b.LoadingTime).localeCompare(String(a.LoadingTime)))
       const loaded = records.reduce((sum, record) => sum + (record.ActualQuantity || 0), 0)
       const required = requiredQuantityForLot(item, batch)
+      const hasFailedRecord = records.some((record) => record.VerifyStatus === VERIFY_STATUS_CODE.failed)
       return {
         BomItemId: item.Id,
         LotId: batch.Id,
@@ -698,9 +699,11 @@ export function getBatchLoadingTasks(lotCode) {
         MaterialCode: material?.MaterialCode || '-',
         MaterialDesc: material?.MaterialDesc || '-',
         PackageType: item.PackageType,
+        MaterialPackageType: material?.PackageType || '-',
+        Brand: material?.Brand || '-',
         RequiredQuantity: required,
         LoadedQuantity: loaded,
-        VerifyStatus: loaded >= required ? VERIFY_STATUS_CODE.passed : VERIFY_STATUS_CODE.pending,
+        VerifyStatus: hasFailedRecord ? VERIFY_STATUS_CODE.failed : loaded >= required ? VERIFY_STATUS_CODE.passed : VERIFY_STATUS_CODE.pending,
         SubstituteMaterialCodes: substitutes.join(',') || '-',
         LoadingRecords: records,
       }

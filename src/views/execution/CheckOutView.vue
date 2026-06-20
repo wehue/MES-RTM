@@ -204,8 +204,8 @@ function submit() {
           <el-table-column label="工单号" min-width="160">
             <template #default="{ row }">{{ getBatchWorkOrder(row)?.WorkOrderCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号" min-width="150">
-            <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
+          <el-table-column label="产品名称" min-width="150">
+            <template #default="{ row }">{{ getBatchProduct(row)?.ProductName || '-' }}</template>
           </el-table-column>
           <el-table-column label="当前工序" min-width="120">
             <template #default="{ row }">{{ getCurrentOperationName(row) }}</template>
@@ -216,11 +216,6 @@ function submit() {
           <el-table-column prop="CompletedQuantity" label="良品" width="90" />
           <el-table-column label="不良" width="90">
             <template #default="{ row }">{{ getBatchDefectQuantity(row) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="110">
-            <template #default="{ row }">
-              <StatusTag :meta="statusMeta(BATCH_STATUS, row.Status)" />
-            </template>
           </el-table-column>
         </el-table>
       </SectionCard>
@@ -236,7 +231,7 @@ function submit() {
         <el-alert v-if="isLocked" title="批次已锁定" type="error" show-icon :closable="false" />
         <el-descriptions :column="1" border style="margin-top: 10px">
           <el-descriptions-item label="批次号">{{ batch.LotCode }}</el-descriptions-item>
-          <el-descriptions-item label="产品型号">{{ getBatchProduct(batch)?.Model }}</el-descriptions-item>
+          <el-descriptions-item label="产品名称">{{ getBatchProduct(batch)?.ProductName }}</el-descriptions-item>
           <el-descriptions-item label="当前工序">{{ currentOperationName }}</el-descriptions-item>
           <el-descriptions-item label="进站数量">{{ currentInQty }}</el-descriptions-item>
           <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
