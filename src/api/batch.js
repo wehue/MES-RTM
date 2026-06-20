@@ -1,33 +1,41 @@
 import request from '@/utils/request'
 
 export function getBatchList(params) {
-  return request.get('/batches', { params })
+  return request.get('/lots', { params })
+}
+
+export function getBatchStatusStats() {
+  return request.get('/lots/status-stats')
+}
+
+export function updateBatchStatus(id, status) {
+  return request.put('/lots/status', null, { params: { id, status } })
 }
 
 export function getBatchDetail(id) {
-  return request.get(`/batches/${id}`)
+  return request.get('/lots/detail', { params: { id } })
 }
 
 export function createBatch(data) {
-  return request.post('/batches', data)
+  return request.post('/lots', data)
 }
 
 export function deleteBatch(id) {
-  return request.delete(`/batches/${id}`)
+  return request.delete(`/lots/${id}`)
 }
 
-export function lockBatch(id, reason) {
-  return request.post(`/batches/${id}/lock`, { reason })
+export function lockBatch(id) {
+  return request.put('/lots/status', null, { params: { id, status: 5 } })
 }
 
-export function unlockBatch(id, reason) {
-  return request.post(`/batches/${id}/unlock`, { reason })
+export function unlockBatch(id) {
+  return request.put('/lots/status', null, { params: { id, status: 2 } })
 }
 
-export function pauseBatch(id, reason) {
-  return request.post(`/batches/${id}/pause`, { reason })
+export function pauseBatch(id) {
+  return request.put('/lots/status', null, { params: { id, status: 3 } })
 }
 
 export function resumeBatch(id) {
-  return request.post(`/batches/${id}/resume`)
+  return request.put('/lots/status', null, { params: { id, status: 2 } })
 }

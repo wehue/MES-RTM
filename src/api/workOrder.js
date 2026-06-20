@@ -4,6 +4,14 @@ export function getWorkOrderList(params) {
   return request.get('/work-orders', { params })
 }
 
+export function getReleasedWorkOrders() {
+  return request.get('/work-orders/released')
+}
+
+export function getReleasedWorkOrderDetail(id) {
+  return request.get('/work-orders/released/detail', { params: { id } })
+}
+
 export function getWorkOrderStatusStats() {
   return request.get('/work-orders/status-stats')
 }

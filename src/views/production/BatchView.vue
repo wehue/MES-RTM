@@ -1,7 +1,7 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import MetricCard from '@/components/MetricCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { BATCH_STATUS, statusMeta } from '@/utils/constants'
@@ -17,19 +17,16 @@ import {
   getBatchRouteProgress,
   getCurrentOperationName,
   findUser,
-  getWorkOrderCompletedQuantity,
-  getWorkOrderProduct,
-  getWorkOrderReleasedBatchCount,
   getWorkOrderRoute,
   getUserDisplayName,
   getUserOptionLabel,
-  lineOptions,
   lines,
-  releaseBatchToFirstProcess,
   users,
-  workOrders,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
+import { getBatchList, getBatchStatusStats, updateBatchStatus, createBatch } from '@/api/batch'
+import { getLineList } from '@/api/line'
+import { getReleasedWorkOrders, getReleasedWorkOrderDetail } from '@/api/workOrder'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -42,6 +39,20 @@ const createForm = reactive({
   OwnerId: 3,
 })
 const batchLineSelections = ref([])
+const statusStats = ref({
+  pendingCount: 0,
+  inProductionCount: 0,
+  pausedCount: 0,
+  lockedCount: 0,
+  repairingCount: 0,
+  completedCount: 0,
+  totalCount: 0,
+})
+const lineList = ref([])
+const batchRows = ref([])
+const listLoading = ref(false)
+const pagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
+const workOrderDetail = ref({})
 
 const canPlanBatch = computed(() => userStore.hasAnyRole(['production_manager']))
 const canCoordinateBatch = computed(() => userStore.hasAnyRole(['production_manager', 'team_leader']))
@@ -49,48 +60,164 @@ const canQualityLock = computed(() => userStore.hasAnyRole(['quality_engineer', 
 const currentUserId = computed(() => findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3)
 const batchStatusCodes = Object.keys(BATCH_STATUS).map(Number)
 
+async function loadStatusStats() {
+  try {
+    const data = await getBatchStatusStats()
+    statusStats.value = data || {
+      pendingCount: 0,
+      inProductionCount: 0,
+      pausedCount: 0,
+      lockedCount: 0,
+      repairingCount: 0,
+      completedCount: 0,
+      totalCount: 0,
+    }
+  } catch (error) {
+    console.error('Failed to load status stats:', error)
+  }
+}
+
+async function loadLines() {
+  try {
+    const data = await getLineList()
+    lineList.value = data || []
+  } catch (error) {
+    console.error('Failed to load lines:', error)
+  }
+}
+
+const releasedWorkOrders = ref([])
+
+async function loadWorkOrders() {
+  try {
+    const data = await getReleasedWorkOrders()
+    releasedWorkOrders.value = data.map(item => ({
+      ...item,
+      Id: item.id,
+      WorkOrderCode: item.workOrderCode,
+      ProductName: item.productName,
+      PlannedQuantity: item.plannedQuantity || 0,
+    })) || []
+  } catch (error) {
+    console.error('Failed to load released work orders:', error)
+    releasedWorkOrders.value = []
+  }
+}
+
+async function loadWorkOrderDetail(workOrderId) {
+  if (!workOrderId) {
+    workOrderDetail.value = {}
+    return
+  }
+  try {
+    const data = await getReleasedWorkOrderDetail(workOrderId)
+    workOrderDetail.value = data
+  } catch (error) {
+    console.error('Failed to load work order detail:', error)
+    workOrderDetail.value = {}
+  }
+}
+
+function normalizeBatch(batch) {
+  return {
+    ...batch,
+    Id: batch.id,
+    LotCode: batch.lotCode,
+    WorkOrderCode: batch.workOrderCode,
+    ProductName: batch.productName,
+    ProductTypeName: batch.productTypeName,
+    LineName: batch.lineName,
+    PlannedQuantity: batch.plannedQuantity,
+    FinishedQuantity: batch.finishedQuantity,
+    DefectQuantity: batch.defectQuantity,
+    CurrentOperationName: batch.currentOperationName,
+    EstimatedCompletionTime: batch.estimatedCompletionTime,
+    StartTime: batch.startTime,
+    EndTime: batch.endTime,
+    Status: batch.status,
+  }
+}
+
+async function loadBatches() {
+  listLoading.value = true
+  try {
+    const result = await getBatchList({
+      lotCode: filters.keyword || undefined,
+      workOrderCode: filters.WorkOrderCode || undefined,
+      productName: filters.ProductName || undefined,
+      status: filters.Status || undefined,
+      lineName: filters.LineCode || undefined,
+      pageNum: pagination.pageNum,
+      pageSize: pagination.pageSize,
+    })
+    batchRows.value = result.list.map(normalizeBatch)
+    pagination.total = result.total || 0
+  } catch (error) {
+    console.error('Failed to load batches:', error)
+    batchRows.value = []
+    pagination.total = 0
+  } finally {
+    listLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadStatusStats()
+  loadLines()
+  loadBatches()
+  loadWorkOrders()
+})
+
 function getCreatedQuantity(order) {
-  return batches
+  return batchRows.value
     .filter((batch) => batch.WorkOrderId === order.Id)
     .reduce((sum, batch) => sum + (batch.PlannedQuantity || 0), 0)
 }
 
-const availableWorkOrders = computed(() => workOrders.filter((item) => {
-  const remaining = Math.max((item.PlannedQuantity || 0) - getCreatedQuantity(item), 0)
-  return remaining > 0 && [WORK_ORDER_STATUS_CODE.released, WORK_ORDER_STATUS_CODE.running].includes(item.Status)
-}))
-const selectedWorkOrder = computed(() => workOrders.find((item) => item.Id === Number(createForm.WorkOrderId)) || null)
+const availableWorkOrders = computed(() => releasedWorkOrders.value)
+const batchLineOptions = computed(() => lineList.value.map(item => item.lineName || item.LineName).filter(Boolean))
+const selectedWorkOrder = computed(() => releasedWorkOrders.value.find((item) => item.Id === Number(createForm.WorkOrderId)) || null)
 const selectedRoute = computed(() => selectedWorkOrder.value ? getWorkOrderRoute(selectedWorkOrder.value) : null)
 const remainingQty = computed(() => {
-  if (!selectedWorkOrder.value) return 0
-  return Math.max((selectedWorkOrder.value.PlannedQuantity || 0) - getCreatedQuantity(selectedWorkOrder.value), 0)
+  if (!workOrderDetail.value.plannedQuantity) return 0
+  return Math.max(workOrderDetail.value.plannedQuantity - getCreatedQuantity(selectedWorkOrder.value), 0)
 })
 const selectedOrderCode = computed(() => selectedWorkOrder.value ? selectedWorkOrder.value.WorkOrderCode : '未选择')
 const selectedOrderProduct = computed(() => {
-  const product = selectedWorkOrder.value ? getWorkOrderProduct(selectedWorkOrder.value) : null
-  return product ? `${product.ProductName} / ${product.Model}` : '请选择可创建批次的工单'
+  return selectedWorkOrder.value?.ProductName || '请选择可创建批次的工单'
 })
 const selectedOrderPlanned = computed(() => selectedWorkOrder.value ? selectedWorkOrder.value.PlannedQuantity : '-')
 const selectedRouteName = computed(() => selectedRoute.value ? selectedRoute.value.RouteName : '-')
 const selectedFirstStep = computed(() => selectedRoute.value ? '投产后生成首道工序' : '待排产')
 const generatedBatchRows = computed(() => {
   const count = Math.max(Number(createForm.BatchCount) || 1, 1)
-  const total = remainingQty.value
-  if (!selectedWorkOrder.value) return []
-  const base = Math.floor(total / count)
-  const rest = total % count
+  if (!selectedWorkOrder.value || !workOrderDetail.value.plannedQuantity) return []
+  const totalQty = workOrderDetail.value.plannedQuantity
+  const baseQty = Math.floor(totalQty / count)
+  const remainder = totalQty % count
   return Array.from({ length: count }, (_, index) => ({
     Index: index + 1,
-    PlannedQuantity: base + (index < rest ? 1 : 0),
-    LineCode: batchLineSelections.value[index] || lineOptions[0],
+    PlannedQuantity: baseQty + (index < remainder ? 1 : 0),
+    LineCode: batchLineSelections.value[index] || batchLineOptions.value[0],
   }))
 })
 
 watch(
-  () => [createForm.WorkOrderId, createForm.BatchCount],
+  () => createForm.WorkOrderId,
+  async (newId) => {
+    await loadWorkOrderDetail(newId)
+    const count = Math.max(Number(createForm.BatchCount) || 1, 1)
+    const defaultLine = batchLineOptions.value[0]
+    batchLineSelections.value = Array.from({ length: count }, (_, index) => batchLineSelections.value[index] || defaultLine)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => createForm.BatchCount,
   () => {
     const count = Math.max(Number(createForm.BatchCount) || 1, 1)
-    const defaultLine = lineOptions[0]
+    const defaultLine = batchLineOptions.value[0]
     batchLineSelections.value = Array.from({ length: count }, (_, index) => batchLineSelections.value[index] || defaultLine)
   },
 )
@@ -107,11 +234,17 @@ const filteredBatches = computed(() => batches.filter((item) => {
   return keyword && workOrder && productMatched && status && lineMatched
 }))
 
-const statusCards = computed(() => batchStatusCodes.map((code) => ({
-  key: code,
-  ...BATCH_STATUS[code],
-  count: batches.filter((item) => item.Status === code).length,
-})))
+const statusCards = computed(() => {
+  const statusMapping = {
+    1: { key: 1, ...BATCH_STATUS[1], count: statusStats.value.pendingCount },
+    2: { key: 2, ...BATCH_STATUS[2], count: statusStats.value.inProductionCount },
+    3: { key: 3, ...BATCH_STATUS[3], count: statusStats.value.pausedCount },
+    4: { key: 4, ...BATCH_STATUS[4], count: statusStats.value.repairingCount },
+    5: { key: 5, ...BATCH_STATUS[5], count: statusStats.value.lockedCount },
+    6: { key: 6, ...BATCH_STATUS[6], count: statusStats.value.completedCount },
+  }
+  return batchStatusCodes.map((code) => statusMapping[code])
+})
 
 function rowClass({ row }) {
   if ([BATCH_STATUS_CODE.locked, BATCH_STATUS_CODE.repair].includes(row.Status)) return 'danger-row'
@@ -120,14 +253,27 @@ function rowClass({ row }) {
 }
 
 function handleSearch() {
-  Object.assign(query, { ...filters })
+  pagination.pageNum = 1
+  loadBatches()
   ElMessage.success('已按筛选条件查询批次')
 }
 
 function handleReset() {
   Object.assign(filters, { keyword: '', WorkOrderCode: '', ProductName: '', Status: '', LineCode: '' })
-  Object.assign(query, { keyword: '', WorkOrderCode: '', ProductName: '', Status: '', LineCode: '' })
+  pagination.pageNum = 1
+  loadBatches()
   ElMessage.info('筛选条件已重置')
+}
+
+function handlePageChange(pageNum) {
+  pagination.pageNum = pageNum
+  loadBatches()
+}
+
+function handleSizeChange(pageSize) {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  loadBatches()
 }
 
 function openCreateDialog() {
@@ -135,7 +281,7 @@ function openCreateDialog() {
   createForm.WorkOrderId = defaultOrder ? defaultOrder.Id : ''
   createForm.BatchCount = 1
   createForm.OwnerId = currentUserId.value
-  batchLineSelections.value = [lineOptions[0]]
+  batchLineSelections.value = [batchLineOptions.value[0]]
   createDialogVisible.value = true
 }
 
@@ -144,23 +290,11 @@ function splitBatchNo(orderCode, index) {
 }
 
 function workOrderOptionLabel(order) {
-  const product = getWorkOrderProduct(order)
-  return `${order.WorkOrderCode} / ${product?.ProductName || '-'}`
+  return `${order.WorkOrderCode} / ${order.ProductName || '-'}`
 }
 
-function batchDetailPath(lotCode) {
-  return '/production/batch/' + lotCode
-}
-
-function updateBatchStatus(row, status, reason = '-') {
-  row.Status = status
-  row.UpdatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  batchLockState[row.LotCode] = {
-    ...(batchLockState[row.LotCode] || {}),
-    LockReason: reason,
-    AutoLocked: false,
-    OwnerId: createForm.OwnerId || 3,
-  }
+function batchDetailPath(batchId) {
+  return '/production/batch/' + batchId
 }
 
 function addBatchRow() {
@@ -184,7 +318,7 @@ function removeBatchRow(index) {
   createForm.BatchCount -= 1
 }
 
-function submitCreateBatch() {
+async function submitCreateBatch() {
   if (!selectedWorkOrder.value) {
     ElMessage.warning('请先选择可创建批次的工单')
     return
@@ -202,40 +336,30 @@ function submitCreateBatch() {
     return
   }
 
-  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  const newItems = generatedBatchRows.value.map((row, index) => {
-    const line = lines.find((item) => item.LineCode === row.LineCode) || lines[0]
-    const lotCode = splitBatchNo(selectedWorkOrder.value.WorkOrderCode, row.Index)
-    batchLockState[lotCode] = { LockReason: '-', AutoLocked: false, OwnerId: createForm.OwnerId || 3 }
-    return {
-      Id: Date.now() + index,
-      LotCode: lotCode,
-      WorkOrderId: selectedWorkOrder.value.Id,
-      LineId: line.Id,
-      PlannedQuantity: row.PlannedQuantity,
-      CompletedQuantity: 0,
-      Status: BATCH_STATUS_CODE.pending,
-      EstimatedCompletionTime: selectedWorkOrder.value.DueDate,
-      StartTime: null,
-      EndTime: null,
-      CreatedAt: now,
-      CreatedBy: 1,
-      UpdatedAt: now,
-      UpdatedBy: 1,
-      IsDeleted: 0,
-      LastOperationType: 'CREATE',
-      LastOperationRemark: '前端原型新建批次',
+  const createLoading = ElLoading.service({ target: '.batch-create', text: '创建中...' })
+
+  try {
+    for (const row of generatedBatchRows.value) {
+      const line = lineList.value.find(l => l.lineName === row.LineCode || l.LineName === row.LineCode)
+      const lotCode = 'LOT' + selectedWorkOrder.value.WorkOrderCode.slice(2) + '-' + String(row.Index).padStart(2, '0')
+
+      await createBatch({
+        lotCode,
+        workOrderId: Number(createForm.WorkOrderId),
+        lineId: line?.id || 1,
+        plannedQuantity: row.PlannedQuantity,
+        status: 1
+      })
     }
-  })
 
-  batches.push(...newItems)
-  if (selectedWorkOrder.value.Status === WORK_ORDER_STATUS_CODE.released) {
-    selectedWorkOrder.value.Status = WORK_ORDER_STATUS_CODE.running
-    selectedWorkOrder.value.UpdatedAt = now
+    ElMessage.success(`已为 ${selectedWorkOrder.value.WorkOrderCode} 创建 ${generatedBatchRows.value.length} 个批次`)
+    createDialogVisible.value = false
+    await Promise.all([loadBatches(), loadStatusStats(), loadWorkOrders()])
+  } catch (error) {
+    ElMessage.error(`创建失败: ${error.message}`)
+  } finally {
+    createLoading.close()
   }
-
-  createDialogVisible.value = false
-  ElMessage.success(`已为 ${selectedWorkOrder.value.WorkOrderCode} 创建 ${newItems.length} 个批次`)
 }
 
 async function operate(row, action) {
@@ -248,12 +372,15 @@ async function operate(row, action) {
       ElMessage.warning('只有待生产批次可以执行投产')
       return
     }
-    const result = releaseBatchToFirstProcess(row.LotCode)
-    if (!result.ok) {
-      ElMessage.error(result.message)
-      return
+    try {
+      await updateBatchStatus(row.Id, BATCH_STATUS_CODE.running)
+      row.Status = BATCH_STATUS_CODE.running
+      row.UpdatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+      ElMessage.success(`${row.LotCode} 已投产，首道工序已进入待进站`)
+      await Promise.all([loadBatches(), loadStatusStats()])
+    } catch (error) {
+      ElMessage.error(`投产失败: ${error.message}`)
     }
-    ElMessage.success(`${row.LotCode} 已投产，首道工序已进入待进站`)
     return
   }
   if (['暂停', '恢复'].includes(action) && !canCoordinateBatch.value) {
@@ -264,17 +391,22 @@ async function operate(row, action) {
     ElMessage.warning('当前角色无批次锁定 / 解锁权限')
     return
   }
-  const lockInfo = getBatchLockInfo(row)
-  if (action === '解锁' && lockInfo.AutoLocked && !userStore.hasAnyRole(['quality_engineer'])) {
-    ElMessage.error('系统自动锁定批次需要质量工程师完成异常处置后解锁')
-    return
+  
+  let targetStatus
+  if (action === '锁定') targetStatus = BATCH_STATUS_CODE.locked
+  if (action === '解锁') targetStatus = BATCH_STATUS_CODE.running
+  if (action === '暂停') targetStatus = BATCH_STATUS_CODE.paused
+  if (action === '恢复') targetStatus = BATCH_STATUS_CODE.running
+  
+  try {
+    await updateBatchStatus(row.Id, targetStatus)
+    row.Status = targetStatus
+    row.UpdatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
+    ElMessage.success(`${row.LotCode} 已${action}`)
+    await Promise.all([loadBatches(), loadStatusStats()])
+  } catch (error) {
+    ElMessage.error(`${action}失败: ${error.message}`)
   }
-  const { value } = await ElMessageBox.prompt(`请输入${action}原因`, `${row.LotCode} ${action}`, { inputPlaceholder: '原因必填' })
-  if (action === '锁定') updateBatchStatus(row, BATCH_STATUS_CODE.locked, value)
-  if (action === '解锁') updateBatchStatus(row, BATCH_STATUS_CODE.running, value)
-  if (action === '暂停') updateBatchStatus(row, BATCH_STATUS_CODE.paused, value)
-  if (action === '恢复') updateBatchStatus(row, BATCH_STATUS_CODE.running, value)
-  ElMessage.success(`${row.LotCode} 已${action}，原因：${value}`)
 }
 </script>
 
@@ -310,7 +442,7 @@ async function operate(row, action) {
         </el-form-item>
         <el-form-item label="产线">
           <el-select v-model="filters.LineCode" clearable placeholder="全部产线" style="width: 130px">
-            <el-option v-for="line in lineOptions" :key="line" :label="line" :value="line" />
+            <el-option v-for="line in lineList" :key="line.id" :label="line.lineName" :value="line.id" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -323,48 +455,28 @@ async function operate(row, action) {
     </div>
 
     <el-card shadow="never">
-      <el-table :data="filteredBatches" border :row-class-name="rowClass">
-        <el-table-column prop="LotCode" label="批次号" width="240">
-          <template #default="{ row }"><el-link type="primary" @click="router.push(batchDetailPath(row.LotCode))">{{ row.LotCode }}</el-link></template>
+      <el-table v-loading="listLoading" :data="batchRows" border :row-class-name="rowClass">
+        <el-table-column prop="LotCode" label="批次号" width="170px">
+          <template #default="{ row }"><el-link type="primary" @click="router.push(batchDetailPath(row.Id))">{{ row.LotCode }}</el-link></template>
         </el-table-column>
-        <el-table-column label="所属工单" width="190">
-          <template #default="{ row }">{{ workOrders.find((item) => item.Id === row.WorkOrderId)?.WorkOrderCode || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="产品名称" width="190">
-          <template #default="{ row }">{{ getBatchProduct(row)?.ProductName || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="产品型号" width="190">
-          <template #default="{ row }">{{ getBatchProduct(row)?.Model || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="分配产线" width="150">
-          <template #default="{ row }">{{ getBatchLine(row)?.LineCode || '-' }}</template>
-        </el-table-column>
+        <el-table-column prop="WorkOrderCode" label="所属工单" width="190" />
+        <el-table-column prop="ProductName" label="产品名称" width="190" />
+        <el-table-column prop="ProductTypeName" label="产品类型" width="170" />
+        <el-table-column prop="LineName" label="分配产线" width="150" />
         <el-table-column prop="PlannedQuantity" label="计划数量" width="150" />
-        <el-table-column prop="CompletedQuantity" label="已完工" width="130" />
-        <el-table-column label="不良" width="110">
-          <template #default="{ row }">{{ getBatchDefectQuantity(row) }}</template>
-        </el-table-column>
-        <el-table-column label="完成率" width="180">
-          <template #default="{ row }"><el-progress :percentage="getBatchRouteProgress(row.LotCode)" /></template>
-        </el-table-column>
-        <el-table-column label="当前工序" width="150">
-          <template #default="{ row }">{{ getCurrentOperationName(row) }}</template>
-        </el-table-column>
+        <el-table-column prop="FinishedQuantity" label="已完工" width="130" />
+        <el-table-column prop="DefectQuantity" label="不良" width="110" />
+        <el-table-column prop="CurrentOperationName" label="当前工序" width="150" />
         <el-table-column prop="EstimatedCompletionTime" label="预计完成时间" width="210" />
         <el-table-column prop="StartTime" label="上线时间" width="210" />
         <el-table-column label="状态" width="140">
           <template #default="{ row }"><StatusTag :meta="statusMeta(BATCH_STATUS, row.Status)" /></template>
         </el-table-column>
-        <el-table-column label="锁定原因" width="220">
-          <template #default="{ row }">{{ getBatchLockInfo(row).LockReason }}</template>
-        </el-table-column>
-        <el-table-column label="负责人" width="150">
-          <template #default="{ row }">{{ getUserDisplayName(getBatchLockInfo(row).OwnerId) }}</template>
-        </el-table-column>
+
         <el-table-column fixed="right" label="操作" width="360">
           <template #default="{ row }">
             <div class="row-actions">
-              <el-button link type="primary" @click="router.push(batchDetailPath(row.LotCode))">详情</el-button>
+              <el-button link type="primary" @click="router.push(batchDetailPath(row.Id))">详情</el-button>
               <el-button link type="warning" :disabled="row.Status !== BATCH_STATUS_CODE.pending || !canPlanBatch" @click="operate(row, '投产')">投产</el-button>
               <el-button link type="danger" :disabled="row.Status === BATCH_STATUS_CODE.locked || !canQualityLock" @click="operate(row, '锁定')">锁定</el-button>
               <el-button link type="success" :disabled="row.Status !== BATCH_STATUS_CODE.locked || !canQualityLock" @click="operate(row, '解锁')">解锁</el-button>
@@ -376,6 +488,17 @@ async function operate(row, action) {
           </template>
         </el-table-column>
       </el-table>
+      <div class="table-pagination">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[5, 10, 20, 50]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="createDialogVisible" title="新建批次" width="1200px" class="batch-create-dialog" destroy-on-close>
@@ -384,13 +507,13 @@ async function operate(row, action) {
         <div class="batch-create__summary">
           <div>
             <span class="summary-label">当前工单</span>
-            <strong>{{ selectedOrderCode }}</strong>
-            <p>{{ selectedOrderProduct }}</p>
+            <strong>{{ workOrderDetail.workOrderCode || selectedOrderCode }}</strong>
+            <p>{{ workOrderDetail.productName || selectedOrderProduct }}</p>
           </div>
           <div class="summary-metrics">
             <div>
               <span>计划数量</span>
-              <strong>{{ selectedOrderPlanned }}</strong>
+              <strong>{{ workOrderDetail.plannedQuantity || selectedOrderPlanned }}</strong>
             </div>
           </div>
         </div>
@@ -410,16 +533,11 @@ async function operate(row, action) {
                   <el-button type="primary" plain @click="addBatchRow">添加批次</el-button>
                 </div>
               </el-form-item>
-              <el-form-item label="负责人">
-                <el-select v-model="createForm.OwnerId" filterable placeholder="请选择负责人" class="full">
-                  <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
-                </el-select>
-              </el-form-item>
             </el-form>
             <div class="route-info">
               <span>工艺路线</span>
-              <strong>{{ selectedRouteName }}</strong>
-              <small>首工序：{{ selectedFirstStep }}</small>
+              <strong>{{ workOrderDetail.routeName || selectedRouteName }}</strong>
+              <small>首工序：{{ workOrderDetail.firstOperationName || selectedFirstStep }}</small>
             </div>
           </div>
 
@@ -437,7 +555,7 @@ async function operate(row, action) {
               <el-table-column label="产线" width="170">
                 <template #default="{ row }">
                   <el-select v-model="batchLineSelections[row.Index - 1]" placeholder="选择产线">
-                    <el-option v-for="line in lineOptions" :key="line" :label="line" :value="line" />
+                    <el-option v-for="line in batchLineOptions" :key="line" :label="line" :value="line" />
                   </el-select>
                 </template>
               </el-table-column>
@@ -571,6 +689,12 @@ async function operate(row, action) {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 @media (max-width: 960px) {
