@@ -333,23 +333,23 @@ function handleSizeChange(pageSize) {
 
     <el-card shadow="never">
       <el-table v-loading="listLoading" :data="workOrderRows" border>
-        <el-table-column prop="WorkOrderCode" label="工单号" width="230">
+        <el-table-column prop="WorkOrderCode" label="工单号" width="200" align="center">
           <template #default="{ row }">
             <el-link type="primary" @click="router.push(`/production/work-order/${row.Id}`)">{{ row.WorkOrderCode }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="ProductName" label="产品名称" width="190" />
-        <el-table-column prop="ProductTypeName" label="产品类型" width="170" />
-        <el-table-column prop="PlannedQuantity" label="计划数量" width="150" />
-        <el-table-column prop="DueDate" label="交货期" width="180" />
-        <el-table-column prop="RouteName" label="工艺路线" width="230" />
-        <el-table-column label="状态" width="140">
+        <el-table-column prop="ProductName" label="产品名称" width="190" align="center"/>
+        <el-table-column prop="ProductTypeName" label="产品类型" width="170" align="center"/>
+        <el-table-column prop="PlannedQuantity" label="计划数量" width="150" align="center"/>
+        <el-table-column prop="DueDate" label="交货期" width="180" align="center"/>
+        <el-table-column prop="RouteName" label="工艺路线" width="230" align="center"/>
+        <el-table-column label="状态" width="140" align="center">
           <template #default="{ row }">
             <StatusTag :meta="statusMeta(WORK_ORDER_STATUS, row.Status)" />
           </template>
         </el-table-column>
-        <el-table-column prop="CreatedBy" label="创建人" width="150" />
-        <el-table-column prop="CreatedAt" label="创建时间" width="210" />
+        <el-table-column prop="CreatedBy" label="创建人" width="150" align="center"/>
+        <el-table-column prop="CreatedAt" label="创建时间" width="210" align="center"/>
         <el-table-column fixed="right" label="操作" width="310">
           <template #default="{ row }">
             <div class="row-actions">

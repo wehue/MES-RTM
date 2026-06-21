@@ -109,13 +109,13 @@ onMounted(() => {
 
     <SectionCard title="当前工序上料">
       <el-table :data="batchDetail.operationMaterials" border size="small">
-        <el-table-column prop="materialCode" label="元件料号" />
-        <el-table-column prop="bomPackageType" label="BOM封装类型" />
-        <el-table-column prop="materialPackageType" label="物料封装类型" />
-        <el-table-column prop="brand" label="品牌" />
-        <el-table-column prop="bomQuantity" label="单板用量" />
-        <el-table-column prop="actualQuantity" label="已上数量" />
-        <el-table-column label="状态">
+        <el-table-column prop="materialCode" label="元件料号" align="center"/>
+        <el-table-column prop="bomPackageType" label="BOM封装类型" align="center"/>
+        <el-table-column prop="materialPackageType" label="物料封装类型" align="center"/>
+        <el-table-column prop="brand" label="品牌" align="center"/>
+        <el-table-column prop="bomQuantity" label="单板用量" align="center"/>
+        <el-table-column prop="actualQuantity" label="已上数量" align="center"/>
+        <el-table-column label="状态" align="center">
           <template #default="{ row }">
             <el-tag :type="verifyStatusType(row.verifyStatus)">{{ verifyStatusText(row.verifyStatus) }}</el-tag>
           </template>

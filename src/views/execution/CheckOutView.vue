@@ -10,20 +10,16 @@ import {
   DISPOSAL_TYPE_CODE,
   batches,
   batchExecutionState,
-  findUser,
   getBatchDefectQuantity,
-  getBatchProduct,
   getBatchScrapQuantity,
-  getBatchWorkOrder,
   getCurrentOperationName,
   getInspectionThreshold,
-  getUserOptionLabel,
   isInspectionProcess,
   submitBatchCheckOut,
-  users,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { getStationOutList, getStationOutDetail } from '@/api/batch'
+import { getOperators } from '@/api/user'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -35,7 +31,7 @@ const form = reactive({
   QualityAction: 'normal',
   DisposalType: DISPOSAL_TYPE_CODE.repair,
   ForceReason: '',
-  OperatorId: findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3,
+  OperatorId: '',
   DisposalRemark: '',
 })
 
@@ -44,6 +40,35 @@ const listLoading = ref(false)
 const stationOutDetail = ref(null)
 const detailLoading = ref(false)
 const listPagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
+const operatorList = ref([])
+
+async function loadOperatorList() {
+  try {
+    const data = await getOperators()
+    operatorList.value = Array.isArray(data) ? data : []
+    const currentUsername = userStore.userInfo?.username || userStore.userInfo?.name
+    const matchedUser = operatorList.value.find(u =>
+      (u.username || u.Username) === currentUsername ||
+      (u.fullName || u.FullName) === currentUsername
+    )
+    if (matchedUser) {
+      form.OperatorId = matchedUser.id || matchedUser.Id
+    } else if (operatorList.value.length) {
+      form.OperatorId = operatorList.value[0].id || operatorList.value[0].Id
+    }
+  } catch (error) {
+    console.error('Failed to load operator list:', error)
+    operatorList.value = []
+  }
+}
+
+function getOperatorLabel(user) {
+  if (!user) return '-'
+  const name = user.fullName || user.FullName || user.username || user.Username || ''
+  const position = user.position || user.Position || ''
+  const dept = user.department || user.Department || ''
+  return [name, position, dept].filter(Boolean).join(' / ')
+}
 
 async function loadStationOutList() {
   listLoading.value = true
@@ -82,6 +107,7 @@ async function loadStationOutDetail(lotCode) {
 
 onMounted(() => {
   loadStationOutList()
+  loadOperatorList()
 })
 
 function handlePageChange(pageNum) {
@@ -267,11 +293,11 @@ function submit() {
           @current-change="selectBatch"
           @row-click="selectBatch"
         >
-          <el-table-column prop="lotCode" label="批次号" min-width="160" />
-          <el-table-column prop="workOrderCode" label="工单号" min-width="160" />
-          <el-table-column prop="productName" label="产品名称" min-width="150" />
-          <el-table-column prop="currentOperation" label="当前工序" min-width="120" />
-          <el-table-column prop="stationInQuantity" label="进站数量" width="100" />
+          <el-table-column prop="lotCode" label="批次号" min-width="160" align="center"/>
+          <el-table-column prop="workOrderCode" label="工单号" min-width="160" align="center"/>
+          <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
+          <el-table-column prop="currentOperation" label="当前工序" min-width="160" align="center"/>
+          <el-table-column prop="stationInQuantity" label="进站数量" width="180" align="center"/>
         </el-table>
         <div class="table-pagination">
           <el-pagination
@@ -343,7 +369,7 @@ function submit() {
           </el-form-item>
           <el-form-item label="操作人">
             <el-select v-model="form.OperatorId" filterable placeholder="请选择操作人" class="full">
-              <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+              <el-option v-for="user in operatorList" :key="user.id || user.Id" :label="getOperatorLabel(user)" :value="user.id || user.Id" />
             </el-select>
           </el-form-item>
           <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>
@@ -366,7 +392,7 @@ function submit() {
           </el-form-item>
           <el-form-item label="操作人">
             <el-select v-model="form.OperatorId" filterable placeholder="请选择操作人" class="full">
-              <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+              <el-option v-for="user in operatorList" :key="user.id || user.Id" :label="getOperatorLabel(user)" :value="user.id || user.Id" />
             </el-select>
           </el-form-item>
           <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>

@@ -1,22 +1,20 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import MetricCard from '@/components/MetricCard.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import {
   REPAIR_STATUS_CODE,
   findBatch,
-  findUser,
   findOperation,
   findRouteStep,
   getBatchLine,
   getBatchProduct,
-  getUserOptionLabel,
   repairTasks,
   submitRepairResult,
-  users,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
+import { getOperators } from '@/api/user'
 
 const userStore = useUserStore()
 const selected = ref(repairTasks[0] || null)
@@ -26,7 +24,40 @@ const form = reactive({
   ScrapQuantity: 0,
   RepairDescription: '',
   Prevention: '',
-  RepairBy: findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 4,
+  RepairBy: '',
+})
+const operatorList = ref([])
+
+async function loadOperatorList() {
+  try {
+    const data = await getOperators()
+    operatorList.value = Array.isArray(data) ? data : []
+    const currentUsername = userStore.userInfo?.username || userStore.userInfo?.name
+    const matchedUser = operatorList.value.find(u =>
+      (u.username || u.Username) === currentUsername ||
+      (u.fullName || u.FullName) === currentUsername
+    )
+    if (matchedUser) {
+      form.RepairBy = matchedUser.id || matchedUser.Id
+    } else if (operatorList.value.length) {
+      form.RepairBy = operatorList.value[0].id || operatorList.value[0].Id
+    }
+  } catch (error) {
+    console.error('Failed to load operator list:', error)
+    operatorList.value = []
+  }
+}
+
+function getOperatorLabel(user) {
+  if (!user) return '-'
+  const name = user.fullName || user.FullName || user.username || user.Username || ''
+  const position = user.position || user.Position || ''
+  const dept = user.department || user.Department || ''
+  return [name, position, dept].filter(Boolean).join(' / ')
+}
+
+onMounted(() => {
+  loadOperatorList()
 })
 const canManageRepair = computed(() => userStore.hasAnyRole(['quality_engineer']))
 
@@ -91,20 +122,20 @@ function submitRepair() {
     <div class="content-grid">
       <SectionCard class="span-12" title="维修任务列表">
         <el-table :data="repairTasks" border highlight-current-row @current-change="selected = $event">
-          <el-table-column label="批次号" min-width="160">
+          <el-table-column label="批次号" min-width="160" align="center">
             <template #default="{ row }">{{ getRepairBatch(row)?.LotCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产品型号">
+          <el-table-column label="产品型号" align="center" min-width="160">
             <template #default="{ row }">{{ getBatchProduct(getRepairBatch(row))?.Model || '-' }}</template>
           </el-table-column>
-          <el-table-column label="产线">
+          <el-table-column label="产线" align="center" min-width="160">
             <template #default="{ row }">{{ getBatchLine(getRepairBatch(row))?.LineCode || '-' }}</template>
           </el-table-column>
-          <el-table-column label="工序">
+          <el-table-column label="工序" align="center" min-width="160">
             <template #default="{ row }">{{ getRepairOperation(row)?.OperationName || '-' }}</template>
           </el-table-column>
-          <el-table-column prop="RepairQuantity" label="送修数量" />
-          <el-table-column prop="Status" label="状态" />
+          <el-table-column prop="RepairQuantity" label="送修数量" align="center"/>
+          <el-table-column prop="Status" label="状态" align="center"/>
         </el-table>
       </SectionCard>
 
@@ -127,7 +158,7 @@ function submitRepair() {
             <el-form-item label="报废数量"><el-input-number v-model="form.ScrapQuantity" :min="0" /></el-form-item>
             <el-form-item label="维修人">
               <el-select v-model="form.RepairBy" filterable placeholder="请选择维修人" class="full">
-                <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+                <el-option v-for="user in operatorList" :key="user.id || user.Id" :label="getOperatorLabel(user)" :value="user.id || user.Id" />
               </el-select>
             </el-form-item>
             <el-form-item label="原因分析"><el-input v-model="form.RepairDescription" type="textarea" /></el-form-item>

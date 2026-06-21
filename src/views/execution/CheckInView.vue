@@ -9,26 +9,16 @@ import {
   BATCH_STATUS_CODE,
   PROCESS_STATUS_CODE,
   batches,
-  findUser,
   getBatchLine,
-  getBatchLoadingSummary,
   getBatchPendingQty,
-  getBatchProduct,
   getBatchWorkOrder,
-  getCurrentOperationName,
   getCurrentProcess,
-  getCurrentProcessStatus,
   getRouteStepRows,
-  getUserOptionLabel,
-  requestBatchLoading,
-  submitBatchCheckIn,
-  users,
-  validateBatchLoading,
-  workOrders,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
-import { getStationInList, getStationInDetail } from '@/api/batch'
-import { getEquipmentTypes } from '@/api/device'
+import { getStationInList, getStationInDetail, createStationIn } from '@/api/batch'
+import { getAvailableEquipmentForLot } from '@/api/device'
+import { getOperators } from '@/api/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -38,7 +28,7 @@ const form = reactive({
   LotCode: String(route.query.LotCode || route.query.batchId || ''),
   EquipmentId: '',
   StationInQuantity: 800,
-  OperatorId: findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3,
+  OperatorId: '',
   VerifyRemark: '',
 })
 
@@ -46,8 +36,38 @@ const stationInList = ref([])
 const listLoading = ref(false)
 const stationInDetail = ref(null)
 const detailLoading = ref(false)
+const submitting = ref(false)
 const listPagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
 const equipmentList = ref([])
+const operatorList = ref([])
+
+async function loadOperatorList() {
+  try {
+    const data = await getOperators()
+    operatorList.value = Array.isArray(data) ? data : []
+    const currentUsername = userStore.userInfo?.username || userStore.userInfo?.name
+    const matchedUser = operatorList.value.find(u =>
+      (u.username || u.Username) === currentUsername ||
+      (u.fullName || u.FullName) === currentUsername
+    )
+    if (matchedUser) {
+      form.OperatorId = matchedUser.id || matchedUser.Id
+    } else if (operatorList.value.length) {
+      form.OperatorId = operatorList.value[0].id || operatorList.value[0].Id
+    }
+  } catch (error) {
+    console.error('Failed to load operator list:', error)
+    operatorList.value = []
+  }
+}
+
+function getOperatorLabel(user) {
+  if (!user) return '-'
+  const name = user.fullName || user.FullName || user.username || user.Username || ''
+  const position = user.position || user.Position || ''
+  const dept = user.department || user.Department || ''
+  return [name, position, dept].filter(Boolean).join(' / ')
+}
 
 async function loadStationInList() {
   listLoading.value = true
@@ -67,9 +87,13 @@ async function loadStationInList() {
   }
 }
 
-async function loadEquipmentList() {
+async function loadEquipmentList(lotId) {
+  if (!lotId) {
+    equipmentList.value = []
+    return
+  }
   try {
-    const data = await getEquipmentTypes()
+    const data = await getAvailableEquipmentForLot(lotId)
     equipmentList.value = Array.isArray(data) ? data : []
   } catch (error) {
     console.error('Failed to load equipment list:', error)
@@ -111,8 +135,21 @@ async function loadStationInDetail(lotCode) {
 
 onMounted(() => {
   loadStationInList()
-  loadEquipmentList()
+  loadOperatorList()
 })
+
+watch(() => form.LotCode, async (newLotCode) => {
+  if (newLotCode) {
+    await loadStationInDetail(newLotCode)
+    const batch = stationInList.value.find(item => item.lotCode === newLotCode)
+    if (batch?.id) {
+      await loadEquipmentList(batch.id)
+    }
+  } else {
+    stationInDetail.value = null
+    equipmentList.value = []
+  }
+}, { immediate: true })
 
 const availableBatches = computed(() => pagedStationInList.value)
 
@@ -158,8 +195,18 @@ const currentLine = computed(() => {
   }
   return mockBatch.value ? getBatchLine(mockBatch.value) : null
 })
-const loadingSummary = computed(() => mockBatch.value ? getBatchLoadingSummary(mockBatch.value.LotCode) : { Percentage: 0 })
-const loadingValidation = computed(() => mockBatch.value ? validateBatchLoading(mockBatch.value.LotCode) : { pass: false, missing: [], message: '暂无待进站批次' })
+// BOM 齐套校验（完全依赖后端 /api/lots/station-in/detail 返回的 verifyFailedTotalQuantity：
+//  - 0        → 当前工序 BOM 物料全部校验通过
+//  - >0       → 当前工序仍有 N 个物料未上料/校验失败
+//  - null/undef → 数据还未加载完成
+const loadingValidation = computed(() => {
+  if (!stationInList.value.length) return { pass: false, type: 'info', message: '暂无可进站批次，无法进行 BOM 校验。' }
+  if (!stationInDetail.value) return { pass: false, type: 'info', message: '加载中...' }
+  const failedQty = stationInDetail.value.verifyFailedTotalQuantity
+  if (failedQty === null || failedQty === undefined) return { pass: false, type: 'info', message: 'BOM 校验结果暂未返回，稍后重试。' }
+  if (Number(failedQty) <= 0) return { pass: true, type: 'success', message: '当前工序 BOM 物料校验通过，满足进站条件。' }
+  return { pass: false, type: 'warning', message: `BOM 物料未齐套，当前工序仍有 ${Number(failedQty)} 个物料校验失败，请先到上料管理补齐物料。` }
+})
 const canSubmit = computed(() => Boolean(currentBatch.value && form.EquipmentId && processCompliance.value.pass && loadingValidation.value.pass))
 
 watch(() => form.LotCode, (lotCode) => {
@@ -180,7 +227,7 @@ function selectBatch(batch) {
   form.LotCode = batch.lotCode
 }
 
-function submit() {
+async function submit() {
   if (!canSubmit.value) {
     if (!processCompliance.value.pass) {
       ElMessage.error(processCompliance.value.message)
@@ -191,27 +238,49 @@ function submit() {
       return
     }
     if (!loadingValidation.value.pass) {
-      requestBatchLoading(form.LotCode, loadingValidation.value.message)
-      ElMessage.error('BOM 物料未齐套，已生成补料请求，请到上料管理补齐。')
+      ElMessage.error(loadingValidation.value.message)
       router.push('/execution/loading')
       return
     }
     ElMessage.error('当前批次不满足进站条件')
     return
   }
-  const result = submitBatchCheckIn(form.LotCode, {
-    StationInQuantity: form.StationInQuantity,
-    EquipmentId: Number(form.EquipmentId),
-    OperatorId: Number(form.OperatorId),
-    StationInTime: '2026-05-20 14:50',
-    VerifyRemark: form.VerifyRemark,
-  })
-  if (!result.ok) {
-    ElMessage.error(result.message)
+  // 以当前选中批次的 id（即 lotId）作为进站提交的主键
+  const lotId = currentBatch.value?.id
+  if (!lotId) {
+    ElMessage.error('未找到当前批次 ID，无法提交进站')
     return
   }
-  ElMessage.success('进站成功，批次已进入当前工序生产中')
-  router.push('/execution/check-out')
+  const payload = {
+    lotId: Number(lotId),
+    equipmentId: Number(form.EquipmentId),
+    operatorId: Number(form.OperatorId),
+    stationInQuantity: Number(form.StationInQuantity),
+    remark: form.VerifyRemark || undefined,
+  }
+  if (!payload.equipmentId) {
+    ElMessage.error('请选择可用设备')
+    return
+  }
+  if (!payload.operatorId) {
+    ElMessage.error('请选择操作人')
+    return
+  }
+  if (!payload.stationInQuantity || payload.stationInQuantity <= 0) {
+    ElMessage.error('进站数量必须大于 0')
+    return
+  }
+  submitting.value = true
+  try {
+    await createStationIn(payload)
+    ElMessage.success('进站成功，批次已进入当前工序生产中')
+    router.push('/execution/check-out')
+  } catch (error) {
+    const message = (error && error.message) ? error.message : '进站提交失败，请稍后重试'
+    ElMessage.error(message)
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -236,11 +305,11 @@ function submit() {
           @current-change="selectBatch"
           @row-click="selectBatch"
         >
-          <el-table-column prop="lotCode" label="批次号" min-width="160" />
-          <el-table-column prop="workOrderCode" label="工单号" min-width="160" />
-          <el-table-column prop="productName" label="产品名称" min-width="150" />
-          <el-table-column prop="lineName" label="产线" width="100" />
-          <el-table-column prop="pendingStationInQuantity" label="待进站数量" width="120" />
+          <el-table-column prop="lotCode" label="批次号" min-width="160" align="center"/>
+          <el-table-column prop="workOrderCode" label="工单号" min-width="160" align="center"/>
+          <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
+          <el-table-column prop="lineName" label="产线" width="180" align="center" />
+          <el-table-column prop="pendingStationInQuantity" label="待进站数量" width="180" align="center" />
         </el-table>
         <div class="table-pagination">
           <el-pagination
@@ -292,8 +361,8 @@ function submit() {
           />
           <el-alert
             style="margin-top: 10px"
-            :title="loadingValidation.pass ? `上料完成率 ${loadingSummary.Percentage}% ，当前工序 BOM 校验通过。` : loadingValidation.message"
-            :type="loadingValidation.pass ? 'success' : 'warning'"
+            :title="loadingValidation.message"
+            :type="loadingValidation.type"
             show-icon
             :closable="false"
           />
@@ -304,7 +373,7 @@ function submit() {
                 <el-option
                   v-for="equipment in equipmentList"
                   :key="equipment.id"
-                  :label="`${equipment.typeCode} / ${equipment.typeName}`"
+                  :label="`${equipment.equipmentCode} / ${equipment.equipmentName} / ${equipment.equipmentTypeName}`"
                   :value="equipment.id"
                 />
               </el-select>
@@ -314,7 +383,7 @@ function submit() {
             </el-form-item>
             <el-form-item label="操作人">
               <el-select v-model="form.OperatorId" filterable placeholder="请选择操作人" class="full">
-                <el-option v-for="user in users" :key="user.Id" :label="getUserOptionLabel(user)" :value="user.Id" />
+                <el-option v-for="user in operatorList" :key="user.id || user.Id" :label="getOperatorLabel(user)" :value="user.id || user.Id" />
               </el-select>
             </el-form-item>
             <el-form-item label="校验备注">
@@ -324,7 +393,7 @@ function submit() {
               <div class="table-actions">
                 <el-button size="large" @click="router.push('/execution/loading')">上料管理</el-button>
                 <el-button size="large" @click="Object.assign(form, { EquipmentId: '', StationInQuantity: stationInDetail?.plannedQuantity || 1, VerifyRemark: '' })">信息重置</el-button>
-                <el-button type="primary" size="large" class="big-action" @click="submit">提交进站</el-button>
+                <el-button type="primary" size="large" class="big-action" :loading="submitting" @click="submit">提交进站</el-button>
               </div>
             </el-form-item>
           </el-form>

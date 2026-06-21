@@ -23,8 +23,8 @@ export function updateBatchStatus(id, status) {
 }
 
 // 查询批次详情
-// 接口：GET /api/lots/detail
-// 用途：批次详情页展示，包含批次基本信息、工艺路线、各工序进度等
+// 接口：GET /api/lots/detail?id={lotId}
+// 用途：批次详情页展示，包含批次基础信息、工艺路线、当前工序上料清单（operationMaterials）等
 export function getBatchDetail(id) {
   return request.get('/lots/detail', { params: { id } })
 }
@@ -57,9 +57,26 @@ export function getStationOutDetail(lotCode) {
   return request.get('/lots/station-out/detail', { params: { lotCode } })
 }
 
+// 查询待上料批次列表（上料管理列表页用）
+// 接口：GET /api/lots/pending-loading/list
+// 用途：上料管理列表页，返回所有"待上料"批次，包含批次号、工单号、产品、产线、
+//      当前工序、上料完成率、BOM 校验结果等信息
+export function getPendingLoadingList() {
+  return request.get('/lots/pending-loading/list')
+}
+
 // 新建批次
 // 接口：POST /api/lots
 // 用途：批次管理页面新增批次，参数包含 lotCode、workOrderId、lineId、plannedQuantity 等
 export function createBatch(data) {
   return request.post('/lots', data)
+}
+
+// 执行进站
+// 接口：POST /api/station-in
+// 用途：进站操作页面提交“执行进站”；后端会自动识别当前工序、写入进站记录，
+//      首道工序进站时会把批次状态改为“生产中”
+// 参数：{ lotId, equipmentId, operatorId, stationInQuantity, remark }
+export function createStationIn(data) {
+  return request.post('/station-in', data)
 }

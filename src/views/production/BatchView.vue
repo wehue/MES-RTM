@@ -445,20 +445,20 @@ async function operate(row, action) {
 
     <el-card shadow="never">
       <el-table v-loading="listLoading" :data="batchRows" border :row-class-name="rowClass">
-        <el-table-column prop="LotCode" label="批次号" width="170px">
+        <el-table-column prop="LotCode" label="批次号" width="170px" align="center">
           <template #default="{ row }"><el-link type="primary" @click="router.push(batchDetailPath(row.Id))">{{ row.LotCode }}</el-link></template>
         </el-table-column>
-        <el-table-column prop="WorkOrderCode" label="所属工单" width="190" />
-        <el-table-column prop="ProductName" label="产品名称" width="190" />
-        <el-table-column prop="ProductTypeName" label="产品类型" width="170" />
-        <el-table-column prop="LineName" label="分配产线" width="150" />
-        <el-table-column prop="PlannedQuantity" label="计划数量" width="150" />
-        <el-table-column prop="FinishedQuantity" label="已完工数量" width="130" />
-        <el-table-column prop="DefectQuantity" label="不良数量" width="110" />
-        <el-table-column prop="CurrentOperationName" label="当前工序" width="150" />
-        <el-table-column prop="EstimatedCompletionTime" label="预计完成时间" width="210" />
-        <el-table-column prop="StartTime" label="上线时间" width="210" />
-        <el-table-column label="状态" width="140">
+        <el-table-column prop="WorkOrderCode" label="所属工单" width="190" align="center"/>
+        <el-table-column prop="ProductName" label="产品名称" width="190" align="center"/>
+        <el-table-column prop="ProductTypeName" label="产品类型" width="170" align="center"/>
+        <el-table-column prop="LineName" label="分配产线" width="150" align="center"/>
+        <el-table-column prop="PlannedQuantity" label="计划数量" width="150" align="center"/>
+        <el-table-column prop="FinishedQuantity" label="已完工数量" width="130" align="center"/>
+        <el-table-column prop="DefectQuantity" label="不良数量" width="110" align="center"/>
+        <el-table-column prop="CurrentOperationName" label="当前工序" width="150" align="center"/>
+        <el-table-column prop="EstimatedCompletionTime" label="预计完成时间" width="210" align="center"/>
+        <el-table-column prop="StartTime" label="上线时间" width="210" align="center"/>
+        <el-table-column label="状态" width="140" align="center">
           <template #default="{ row }"><StatusTag :meta="statusMeta(BATCH_STATUS, row.Status)" /></template>
         </el-table-column>
 

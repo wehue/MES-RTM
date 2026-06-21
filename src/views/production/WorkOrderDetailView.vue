@@ -144,40 +144,40 @@ onMounted(() => {
     <div class="content-grid">
       <SectionCard class="span-12" title="产品 BOM 信息" :subtitle="detail.bom?.bomVersion || '-'">
         <el-table :data="bomRows" border size="small">
-          <el-table-column prop="MaterialCode" label="元件料号" min-width="120" />
-          <el-table-column prop="PackageType" label="BOM封装类型" min-width="120" />
-          <el-table-column prop="MaterialPackageType" label="物料封装类型" min-width="120" />
-          <el-table-column prop="Quantity" label="单板用量" min-width="120" />
-          <el-table-column prop="Brand" label="品牌" min-width="120" />
+          <el-table-column prop="MaterialCode" label="元件料号" min-width="120" align="center"/>
+          <el-table-column prop="PackageType" label="BOM封装类型" min-width="120" align="center"/>
+          <el-table-column prop="MaterialPackageType" label="物料封装类型" min-width="120" align="center"/>
+          <el-table-column prop="Quantity" label="单板用量" min-width="120" align="center"/>
+          <el-table-column prop="Brand" label="品牌" min-width="120" align="center"/>
         </el-table>
       </SectionCard>
 
       <SectionCard class="span-12" title="工艺路线信息" :subtitle="baseInfo.routeName || '-'">
         <el-table :data="routeStepRows" border size="small">
-          <el-table-column prop="Sequence" label="顺序" width="80" />
-          <el-table-column prop="OperationCode" label="工序编码" />
-          <el-table-column prop="OperationName" label="工序名称" />
-          <el-table-column prop="EquipmentTypeName" label="设备类型" />
-          <el-table-column prop="StandardTimeText" label="标准工时" />
+          <el-table-column prop="Sequence" label="顺序" width="80" align="center"/>
+          <el-table-column prop="OperationCode" label="工序编码" align="center"/>
+          <el-table-column prop="OperationName" label="工序名称" align="center"/>
+          <el-table-column prop="EquipmentTypeName" label="设备类型" align="center"/>
+          <el-table-column prop="StandardTimeText" label="标准工时" align="center"/>
         </el-table>
       </SectionCard>
 
       <SectionCard class="span-12" title="批次列表">
         <el-table :data="lotRows" border>
-          <el-table-column prop="LotCode" label="批次号" min-width="160">
+          <el-table-column prop="LotCode" label="批次号" min-width="120"align="center">
             <template #default="{ row }">
               <el-link type="primary" @click="router.push(`/production/batch/${row.Id}`)">{{ row.LotCode }}</el-link>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="105">
+          <el-table-column label="状态" width="120" align="center">
             <template #default="{ row }"><StatusTag :meta="statusMeta(BATCH_STATUS, row.Status)" /></template>
           </el-table-column>
-          <el-table-column prop="PlannedQuantity" label="计划数量" width="95" />
-          <el-table-column prop="CompletedQuantity" label="完工数量" width="95" />
-          <el-table-column prop="CurrentOperation" label="当前工序" />
-          <el-table-column prop="LineName" label="产线" />
-          <el-table-column prop="StartTime" label="上线时间" />
-          <el-table-column prop="EstimatedCompletionTime" label="预计下线" />
+          <el-table-column prop="PlannedQuantity" label="计划数量" width="110" align="center"/>
+          <el-table-column prop="CompletedQuantity" label="完工数量" width="110" align="center"/>
+          <el-table-column prop="CurrentOperation" label="当前工序" align="center"/>
+          <el-table-column prop="LineName" label="产线" align="center"/>
+          <el-table-column prop="StartTime" label="上线时间" align="center"/>
+          <el-table-column prop="EstimatedCompletionTime" label="预计下线" align="center"/>
         </el-table>
       </SectionCard>
 
