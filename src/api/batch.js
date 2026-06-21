@@ -1,41 +1,65 @@
 import request from '@/utils/request'
 
+// 多条件分页查询批次列表
+// 接口：GET /api/lots
+// 用途：批次管理页面列表展示，支持按工单号、产品、产线、状态等条件筛选
 export function getBatchList(params) {
   return request.get('/lots', { params })
 }
 
+// 获取各状态批次数量统计
+// 接口：GET /api/lots/status-stats
+// 用途：批次管理页面顶部状态卡片（待生产/生产中/已完成等数量）
 export function getBatchStatusStats() {
   return request.get('/lots/status-stats')
 }
 
+// 修改批次状态
+// 接口：PUT /api/lots/status
+// 用途：投产、暂停、恢复、锁定、解锁等状态切换操作
+// status: 1-待生产 2-生产中 3-已暂停 4-已完成 5-已锁定
 export function updateBatchStatus(id, status) {
   return request.put('/lots/status', null, { params: { id, status } })
 }
 
+// 查询批次详情
+// 接口：GET /api/lots/detail
+// 用途：批次详情页展示，包含批次基本信息、工艺路线、各工序进度等
 export function getBatchDetail(id) {
   return request.get('/lots/detail', { params: { id } })
 }
 
+// 获取待进站批次列表（进站操作用）
+// 接口：GET /api/lots/station-in/list
+// 用途：进站操作页面左侧列表，展示所有状态为生产中且当前工序待进站的批次
+export function getStationInList() {
+  return request.get('/lots/station-in/list')
+}
+
+// 按批次号查询进站详情
+// 接口：GET /api/lots/station-in/detail
+// 用途：进站操作页面右侧详情，展示当前工序、上一工序、待进站数量等信息
+export function getStationInDetail(lotCode) {
+  return request.get('/lots/station-in/detail', { params: { lotCode } })
+}
+
+// 获取可出站批次列表（出站操作用）
+// 接口：GET /api/lots/station-out/list
+// 用途：出站操作页面左侧列表，展示所有当前工序已进站可出站的批次
+export function getStationOutList() {
+  return request.get('/lots/station-out/list')
+}
+
+// 按批次号查询出站详情
+// 接口：GET /api/lots/station-out/detail
+// 用途：出站操作页面右侧详情，展示当前工序、进站数量、批次状态等信息
+export function getStationOutDetail(lotCode) {
+  return request.get('/lots/station-out/detail', { params: { lotCode } })
+}
+
+// 新建批次
+// 接口：POST /api/lots
+// 用途：批次管理页面新增批次，参数包含 lotCode、workOrderId、lineId、plannedQuantity 等
 export function createBatch(data) {
   return request.post('/lots', data)
-}
-
-export function deleteBatch(id) {
-  return request.delete(`/lots/${id}`)
-}
-
-export function lockBatch(id) {
-  return request.put('/lots/status', null, { params: { id, status: 5 } })
-}
-
-export function unlockBatch(id) {
-  return request.put('/lots/status', null, { params: { id, status: 2 } })
-}
-
-export function pauseBatch(id) {
-  return request.put('/lots/status', null, { params: { id, status: 3 } })
-}
-
-export function resumeBatch(id) {
-  return request.put('/lots/status', null, { params: { id, status: 2 } })
 }

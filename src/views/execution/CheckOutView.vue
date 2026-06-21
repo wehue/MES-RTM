@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
@@ -8,7 +8,6 @@ import { BATCH_STATUS, statusMeta } from '@/utils/constants'
 import {
   BATCH_STATUS_CODE,
   DISPOSAL_TYPE_CODE,
-  PROCESS_STATUS_CODE,
   batches,
   batchExecutionState,
   findUser,
@@ -17,7 +16,6 @@ import {
   getBatchScrapQuantity,
   getBatchWorkOrder,
   getCurrentOperationName,
-  getCurrentProcessStatus,
   getInspectionThreshold,
   getUserOptionLabel,
   isInspectionProcess,
@@ -25,6 +23,7 @@ import {
   users,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
+import { getStationOutList, getStationOutDetail } from '@/api/batch'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -40,37 +39,104 @@ const form = reactive({
   DisposalRemark: '',
 })
 
-const availableBatches = computed(() => batches.filter((item) => getCurrentProcessStatus(item.LotCode) === PROCESS_STATUS_CODE.checked_in))
-const batch = computed(() => availableBatches.value.find((item) => item.LotCode === form.LotCode) || availableBatches.value[0] || null)
+const stationOutList = ref([])
+const listLoading = ref(false)
+const stationOutDetail = ref(null)
+const detailLoading = ref(false)
+const listPagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
+
+async function loadStationOutList() {
+  listLoading.value = true
+  try {
+    const data = await getStationOutList()
+    stationOutList.value = Array.isArray(data) ? data : []
+    listPagination.total = stationOutList.value.length
+    if (!form.LotCode && stationOutList.value.length) {
+      form.LotCode = stationOutList.value[0].lotCode
+    }
+  } catch (error) {
+    console.error('Failed to load station-out list:', error)
+    stationOutList.value = []
+    listPagination.total = 0
+  } finally {
+    listLoading.value = false
+  }
+}
+
+async function loadStationOutDetail(lotCode) {
+  if (!lotCode) {
+    stationOutDetail.value = null
+    return
+  }
+  detailLoading.value = true
+  try {
+    const data = await getStationOutDetail(lotCode)
+    stationOutDetail.value = data
+  } catch (error) {
+    console.error('Failed to load station-out detail:', error)
+    stationOutDetail.value = null
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadStationOutList()
+})
+
+function handlePageChange(pageNum) {
+  listPagination.pageNum = pageNum
+}
+
+function handleSizeChange(pageSize) {
+  listPagination.pageSize = pageSize
+  listPagination.pageNum = 1
+}
+
+const pagedStationOutList = computed(() => {
+  const start = (listPagination.pageNum - 1) * listPagination.pageSize
+  const end = start + listPagination.pageSize
+  return stationOutList.value.slice(start, end)
+})
+
+const availableBatches = computed(() => pagedStationOutList.value)
+
+const currentBatch = computed(() => {
+  return stationOutList.value.find(item => item.lotCode === form.LotCode) || null
+})
+
+const mockBatch = computed(() => batches.find(item => item.LotCode === form.LotCode) || null)
+
 const canForce = computed(() => userStore.hasAnyRole(['production_manager']))
-const isLocked = computed(() => batch.value?.Status === BATCH_STATUS_CODE.locked)
-const currentInQty = computed(() => batch.value ? (batchExecutionState[batch.value.LotCode]?.CurrentInQuantity || batch.value.CompletedQuantity + getBatchDefectQuantity(batch.value) + getBatchScrapQuantity(batch.value)) : 0)
-const currentOperationName = computed(() => batch.value ? getCurrentOperationName(batch.value) : '-')
-const isInspection = computed(() => batch.value ? isInspectionProcess(currentOperationName.value) : false)
-const inspectionThreshold = computed(() => batch.value ? getInspectionThreshold(currentOperationName.value) : 0)
+const isLocked = computed(() => stationOutDetail.value?.lotStatus === BATCH_STATUS_CODE.locked)
+const currentInQty = computed(() => {
+  if (stationOutDetail.value?.stationInQuantity) {
+    return stationOutDetail.value.stationInQuantity
+  }
+  if (mockBatch.value) {
+    return batchExecutionState[mockBatch.value.LotCode]?.CurrentInQuantity || 
+           mockBatch.value.CompletedQuantity + getBatchDefectQuantity(mockBatch.value) + getBatchScrapQuantity(mockBatch.value)
+  }
+  return 0
+})
+const currentOperationName = computed(() => stationOutDetail.value?.currentOperation || (mockBatch.value ? getCurrentOperationName(mockBatch.value) : '-'))
+const isInspection = computed(() => currentOperationName.value ? isInspectionProcess(currentOperationName.value) : false)
+const inspectionThreshold = computed(() => currentOperationName.value ? getInspectionThreshold(currentOperationName.value) : 0)
 const inspectionPass = computed(() => form.PassRate >= inspectionThreshold.value)
 const checkoutTotal = computed(() => form.FinishedQuantity + form.DefectQuantity)
 const quantityValid = computed(() => checkoutTotal.value === currentInQty.value)
 
-watch(batch, (current) => {
-  if (!current) {
-    Object.assign(form, {
-      LotCode: '',
-      FinishedQuantity: 0,
-      DefectQuantity: 0,
-      PassRate: 100,
-      QualityAction: 'normal',
-      ForceReason: '',
-    })
-    return
-  }
-  form.LotCode = current.LotCode
-  form.FinishedQuantity = currentInQty.value
-  form.DefectQuantity = 0
-  form.PassRate = 100
-  form.QualityAction = 'normal'
-  form.DisposalType = DISPOSAL_TYPE_CODE.repair
-  form.ForceReason = ''
+watch(() => form.LotCode, (lotCode) => {
+  loadStationOutDetail(lotCode)
+  const qty = currentInQty.value
+  Object.assign(form, {
+    FinishedQuantity: qty,
+    DefectQuantity: 0,
+    PassRate: 100,
+    QualityAction: 'normal',
+    ForceReason: '',
+    DisposalType: DISPOSAL_TYPE_CODE.repair,
+  })
 }, { immediate: true })
 
 watch(inspectionPass, (pass) => {
@@ -78,8 +144,8 @@ watch(inspectionPass, (pass) => {
 })
 
 function selectBatch(row) {
-  if (!row?.LotCode) return
-  form.LotCode = row.LotCode
+  if (!row?.lotCode) return
+  form.LotCode = row.lotCode
 }
 
 function clampQuantity(value) {
@@ -107,7 +173,7 @@ function syncDefectQuantity(value) {
 }
 
 function submit() {
-  if (!batch.value) {
+  if (!currentBatch.value) {
     ElMessage.error('当前没有可出站批次')
     return
   }
@@ -192,51 +258,52 @@ function submit() {
     <div class="content-grid">
       <SectionCard class="span-12" title="可出站批次列表">
         <el-table
+          v-loading="listLoading"
           :data="availableBatches"
           border
           highlight-current-row
-          row-key="LotCode"
+          row-key="lotCode"
           :current-row-key="form.LotCode"
           @current-change="selectBatch"
           @row-click="selectBatch"
         >
-          <el-table-column prop="LotCode" label="批次号" min-width="160" />
-          <el-table-column label="工单号" min-width="160">
-            <template #default="{ row }">{{ getBatchWorkOrder(row)?.WorkOrderCode || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="产品名称" min-width="150">
-            <template #default="{ row }">{{ getBatchProduct(row)?.ProductName || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="当前工序" min-width="120">
-            <template #default="{ row }">{{ getCurrentOperationName(row) }}</template>
-          </el-table-column>
-          <el-table-column label="进站数量" width="100">
-            <template #default="{ row }">{{ batchExecutionState[row.LotCode]?.CurrentInQuantity || row.CompletedQuantity + getBatchDefectQuantity(row) + getBatchScrapQuantity(row) }}</template>
-          </el-table-column>
-          <el-table-column prop="CompletedQuantity" label="良品" width="90" />
-          <el-table-column label="不良" width="90">
-            <template #default="{ row }">{{ getBatchDefectQuantity(row) }}</template>
-          </el-table-column>
+          <el-table-column prop="lotCode" label="批次号" min-width="160" />
+          <el-table-column prop="workOrderCode" label="工单号" min-width="160" />
+          <el-table-column prop="productName" label="产品名称" min-width="150" />
+          <el-table-column prop="currentOperation" label="当前工序" min-width="120" />
+          <el-table-column prop="stationInQuantity" label="进站数量" width="100" />
         </el-table>
+        <div class="table-pagination">
+          <el-pagination
+            v-model:current-page="listPagination.pageNum"
+            v-model:page-size="listPagination.pageSize"
+            :page-sizes="[5, 10, 20, 50]"
+            :total="listPagination.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
+        </div>
       </SectionCard>
 
-      <SectionCard v-if="batch" class="span-12" title="批次与出站信息">
+      <SectionCard v-if="currentBatch" class="span-12" title="批次与出站信息">
         <el-form label-position="top">
           <el-form-item label="选择批次">
             <el-select v-model="form.LotCode" filterable class="full">
-              <el-option v-for="item in availableBatches" :key="item.LotCode" :label="item.LotCode" :value="item.LotCode" />
+              <el-option v-for="item in stationOutList" :key="item.lotCode" :label="item.lotCode" :value="item.lotCode" />
             </el-select>
           </el-form-item>
         </el-form>
         <el-alert v-if="isLocked" title="批次已锁定" type="error" show-icon :closable="false" />
-        <el-descriptions :column="1" border style="margin-top: 10px">
-          <el-descriptions-item label="批次号">{{ batch.LotCode }}</el-descriptions-item>
-          <el-descriptions-item label="产品名称">{{ getBatchProduct(batch)?.ProductName }}</el-descriptions-item>
+        <el-descriptions :column="1" border style="margin-top: 10px" v-loading="detailLoading">
+          <el-descriptions-item label="批次号">{{ currentBatch.lotCode }}</el-descriptions-item>
+          <el-descriptions-item label="产品名称">{{ stationOutDetail?.productName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前工序">{{ currentOperationName }}</el-descriptions-item>
           <el-descriptions-item label="进站数量">{{ currentInQty }}</el-descriptions-item>
           <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
           <el-descriptions-item label="批次状态">
-            <StatusTag :meta="statusMeta(BATCH_STATUS, batch.Status)" />
+            <StatusTag v-if="stationOutDetail?.lotStatus" :meta="statusMeta(BATCH_STATUS, stationOutDetail.lotStatus)" />
+            <span v-else>-</span>
           </el-descriptions-item>
         </el-descriptions>
 
@@ -336,5 +403,11 @@ function submit() {
   .checkout-form {
     grid-template-columns: 1fr;
   }
+}
+
+.table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 </style>

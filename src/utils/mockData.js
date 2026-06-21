@@ -368,12 +368,6 @@ export const unloadingRecords = reactive([])
 export const repairTasks = reactive([])
 export const repairRecords = repairTasks
 
-export const batchLockState = reactive({
-  'B20260512005-01': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
-  'B20260512001-01': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
-  'B20260512001-02': { LockReason: '-', AutoLocked: false, OwnerId: 3 },
-})
-
 export const batchExecutionState = reactive({
   'B20260512005-01': { PendingQuantity: 0, CurrentInQuantity: 0, CurrentInTime: null, CurrentEquipmentId: null, CurrentOperatorId: null },
   'B20260512001-01': { PendingQuantity: 0, CurrentInQuantity: 528, CurrentInTime: '2026-05-20 13:10', CurrentEquipmentId: 5, CurrentOperatorId: 3 },
@@ -540,10 +534,6 @@ export function getBatchProduct(batch) {
 
 export function getBatchLine(batch) {
   return batch ? findLine(batch.LineId) : null
-}
-
-export function getBatchLockInfo(batch) {
-  return batchLockState[batch?.LotCode] || { LockReason: '-', AutoLocked: false, OwnerId: null }
 }
 
 export function getBatchDefectQuantity(batch) {
@@ -809,21 +799,6 @@ export const processTimeline = [
   { RouteStepId: 104, OperationName: '回流焊接', StationInTime: '11:50', StationOutTime: '12:20', StationInQuantity: 586, DefectQuantity: 4, OperatorName: '周工', EquipmentCode: 'RFL-A1-01', Result: '通过' },
   { RouteStepId: 105, OperationName: 'AOI 检测', StationInTime: '13:10', StationOutTime: '-', StationInQuantity: 528, DefectQuantity: 7, OperatorName: '张工', EquipmentCode: 'AOI-A1-01', Result: '已进站' },
 ]
-
-export function getBatchRouteProgress(lotCode) {
-  const batch = findBatch(lotCode)
-  if (!batch) return 0
-  const order = getBatchWorkOrder(batch)
-  const totalSteps = getRouteStepRows(order?.RouteId).length
-  if (!totalSteps) return 0
-  if (batch.Status === BATCH_STATUS_CODE.completed) return 100
-
-  const currentProcess = getCurrentProcess(batch)
-  const currentStep = findRouteStep(currentProcess?.RouteStepId)
-  if (!currentStep) return 0
-  const currentIndex = getRouteStepRows(order.RouteId).findIndex((item) => item.Id === currentStep.Id)
-  return Math.max(0, Math.min(100, Math.round((currentIndex / totalSteps) * 100)))
-}
 
 export function dashboardMetrics() {
   const totalOrders = workOrders.length
