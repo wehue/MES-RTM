@@ -1218,8 +1218,8 @@ export function getInspectionThreshold(operationName = '') {
 }
 
 export function inspectionTypeByStep(operationName = '') {
-  if (operationName.includes('SPI')) return 'SPI'
-  if (operationName.includes('AOI')) return 'AOI'
+  if (operationName.includes('SPI') || operationName.includes('spi')) return 'SPI'
+  if (operationName.includes('AOI') || operationName.includes('aoi') || operationName.includes('光学检测')) return 'AOI'
   return ''
 }
 

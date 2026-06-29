@@ -57,6 +57,14 @@ export function getStationOutDetail(lotCode) {
   return request.get('/lots/station-out/detail', { params: { lotCode } })
 }
 
+// 执行出站
+// 接口：POST /api/station-out
+// 用途：出站操作页面提交“执行出站”；后端自动确定当前已进站工序，更新工序状态为已出站并写入出站历史记录
+// 参数：{ lotId, routeStepId, operatorId, finishedQuantity, defectQuantity, disposalType, disposalRemark, spiPassRate, aoiPassRate, remark }
+export function createStationOut(data) {
+  return request.post('/station-out', data)
+}
+
 // 查询待上料批次列表（上料管理列表页用）
 // 接口：GET /api/lots/pending-loading/list
 // 用途：上料管理列表页，返回所有"待上料"批次，包含批次号、工单号、产品、产线、
@@ -79,4 +87,13 @@ export function createBatch(data) {
 // 参数：{ lotId, equipmentId, operatorId, stationInQuantity, remark }
 export function createStationIn(data) {
   return request.post('/station-in', data)
+}
+
+// 执行上料/补料
+// 接口：PUT /api/loading/supplement
+// 用途：上料管理页面提交“保存上料”，后端将本次补充数量写入 smt_loading_records，
+//      并更新该批次对应物料的已上数量与 BOM 校验状态
+// 参数：{ lotId, materialCode, supplementQuantity, operatorId, routeStepId }
+export function supplementMaterial(data) {
+  return request.put('/loading/supplement', data)
 }

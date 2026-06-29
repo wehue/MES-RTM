@@ -15,10 +15,10 @@ import {
   getCurrentOperationName,
   getInspectionThreshold,
   isInspectionProcess,
-  submitBatchCheckOut,
+  getUserDisplayName,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
-import { getStationOutList, getStationOutDetail } from '@/api/batch'
+import { getStationOutList, getStationOutDetail, createStationOut } from '@/api/batch'
 import { getOperators } from '@/api/user'
 
 const router = useRouter()
@@ -41,6 +41,7 @@ const stationOutDetail = ref(null)
 const detailLoading = ref(false)
 const listPagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
 const operatorList = ref([])
+const submitting = ref(false)
 
 async function loadOperatorList() {
   try {
@@ -198,7 +199,8 @@ function syncDefectQuantity(value) {
   }
 }
 
-function submit() {
+async function submit() {
+  if (submitting.value) return
   if (!currentBatch.value) {
     ElMessage.error('当前没有可出站批次')
     return
@@ -232,43 +234,88 @@ function submit() {
     return
   }
 
-  const result = submitBatchCheckOut(form.LotCode, {
-    FinishedQuantity: form.FinishedQuantity,
-    DefectQuantity: form.DefectQuantity,
-    SpiPassRate: currentOperationName.value.includes('SPI') ? form.PassRate : null,
-    AoiPassRate: currentOperationName.value.includes('AOI') ? form.PassRate : null,
-    qualityAction: form.QualityAction,
-    DisposalType: form.DisposalType,
-    OperatorId: Number(form.OperatorId),
-    DisposalRemark: form.DisposalRemark || form.ForceReason,
-    StationOutTime: '2026-05-20 15:00',
-  })
+  const lotId = currentBatch.value?.lotId || stationOutDetail.value?.lotId || (mockBatch.value?.Id || 0)
 
-  if (!result.ok) {
-    ElMessage.error(result.message)
-    return
+  const submitData = {
+    lotId: Number(lotId),
+    routeStepId: currentBatch.value?.routeStepId || stationOutDetail.value?.routeStepId || null,
+    operatorId: Number(form.OperatorId),
   }
 
-  if (result.status === 'repair') {
-    ElMessage.success('出站完成，已生成维修任务，请到维修管理处理。')
-    return
+  if (isInspection.value) {
+    submitData.passRate = form.PassRate
+    if (inspectionPass.value) {
+      submitData.stationOutHandle = 0
+    } else if (form.QualityAction === 'force') {
+      submitData.stationOutHandle = 1
+      submitData.disposalRemark = form.ForceReason
+    } else if (form.QualityAction === 'lock') {
+      submitData.stationOutHandle = 2
+      submitData.disposalRemark = form.ForceReason
+    }
+  } else {
+    submitData.finishedQuantity = form.FinishedQuantity
+    submitData.defectQuantity = form.DefectQuantity
+    if (form.DefectQuantity > 0) {
+      submitData.disposalType = form.DisposalType
+      submitData.disposalRemark = form.DisposalRemark || form.ForceReason || ''
+    }
   }
-  if (result.status === 'locked') {
-    ElMessage.warning('检测通过率低于阈值，批次已锁定，等待质量评审。')
-    return
+
+  submitting.value = true
+  try {
+    console.log('=== 出站提交数据 ===')
+    console.log('stationOutHandle:', submitData.stationOutHandle)
+    console.log('QualityAction:', form.QualityAction)
+    console.log('isInspection:', isInspection.value)
+    
+    const result = await createStationOut(submitData)
+
+        console.log('=== 出站响应数据 ===')
+    console.log('result:', JSON.stringify(result, null, 2))
+    console.log('result.lotStatus:', result.lotStatus, typeof result.lotStatus)
+    console.log('BATCH_STATUS_CODE.locked:', BATCH_STATUS_CODE.locked)
+    console.log('stationOutHandle === 2:', submitData.stationOutHandle === 2)
+    console.log('result.lotStatus === locked:', result.lotStatus === BATCH_STATUS_CODE.locked)
+
+    if (result.disposalType === DISPOSAL_TYPE_CODE.repair && form.DefectQuantity > 0) {
+      ElMessage.success('出站完成，已生成维修任务，即将跳转到维修管理。')
+      router.push('/execution/repair')
+      return
+    }
+
+    if (submitData.stationOutHandle === 2 || result.lotStatus === BATCH_STATUS_CODE.locked || result.lotStatus === 'locked') {
+      ElMessage.warning('通过率低于阈值，批次已锁定，即将跳转到批次管理。')
+      router.push('/production/batch')
+      return
+    }
+
+    if (result.lastStationOut) {
+      ElMessage.success('出站完成，当前批次全部工序已结束。')
+      router.push('/production/batch')
+    } else {
+      ElMessage.success(`出站完成，当前工序：${result.operationName || ''}，即将跳转到进站操作。`)
+      router.push({
+        path: '/execution/check-in',
+        query: {
+          LotCode: result.lotCode || form.LotCode,
+        },
+      })
+    }
+  } catch (error) {
+    console.log('=== 出站响应失败 ===')
+    console.log('error:', error)
+    console.log('error.response:', error.response ? JSON.stringify(error.response.data, null, 2) : 'undefined')
+    console.log('error.message:', error.message)
+    if (submitData.stationOutHandle === 2 || form.QualityAction === 'lock') {
+      // ElMessage.warning('批次已锁定，即将跳转到批次管理。')
+      router.push('/production/batch')
+      return
+    }
+    ElMessage.error(error.message || '出站失败')
+  } finally {
+    submitting.value = false
   }
-  if (result.status === 'wait_in') {
-    ElMessage.success(`出站完成，批次已流转至下一工序：${result.nextStep}，即将跳转到进站操作。`)
-    router.push({
-      path: '/execution/check-in',
-      query: {
-        LotCode: result.batch.LotCode,
-      },
-    })
-    return
-  }
-  ElMessage.success('出站完成，当前批次全部工序已结束。')
-  router.push('/production/batch')
 }
 </script>
 
@@ -298,6 +345,13 @@ function submit() {
           <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
           <el-table-column prop="currentOperation" label="当前工序" min-width="160" align="center"/>
           <el-table-column prop="stationInQuantity" label="进站数量" width="180" align="center"/>
+          <el-table-column label="状态" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.isNormal === false" type="danger">参数不正常</el-tag>
+              <el-tag v-else-if="row.isNormal === true" type="success">正常</el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
         </el-table>
         <div class="table-pagination">
           <el-pagination
@@ -373,7 +427,7 @@ function submit() {
             </el-select>
           </el-form-item>
           <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>
-          <el-button type="primary" size="large" class="big-action" @click="submit">提交出站</el-button>
+          <el-button type="primary" size="large" class="big-action" @click="submit" :loading="submitting" :disabled="submitting">提交出站</el-button>
         </el-form>
 
         <el-form v-else :model="form" label-width="120px" class="checkout-form">
@@ -396,7 +450,7 @@ function submit() {
             </el-select>
           </el-form-item>
           <el-form-item label="处置备注"><el-input v-model="form.DisposalRemark" type="textarea" /></el-form-item>
-          <el-button type="primary" size="large" class="big-action" @click="submit">提交出站</el-button>
+          <el-button type="primary" size="large" class="big-action" @click="submit" :loading="submitting" :disabled="submitting">提交出站</el-button>
         </el-form>
       </SectionCard>
     </div>

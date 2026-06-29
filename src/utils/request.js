@@ -29,11 +29,14 @@ request.interceptors.response.use(
   (response) => {
     NProgress.done()
     const { code, data, message } = response.data
-    if (code === 200 || code === 0) {
+    if (code === 200 || code === 0 || (code >= 200 && code < 300)) {
       return data
     }
     ElMessage.error(message || '请求失败')
-    return Promise.reject(new Error(message || '请求失败'))
+    return Promise.reject({ 
+      message: message || '请求失败', 
+      response: response.data 
+    })
   },
   (error) => {
     NProgress.done()

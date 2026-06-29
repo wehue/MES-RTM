@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
 import { useUserStore } from '@/stores/user'
 import { getOperators } from '@/api/user'
-import { getPendingLoadingList, getBatchDetail } from '@/api/batch'
+import { getPendingLoadingList, getBatchDetail, supplementMaterial } from '@/api/batch'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -182,7 +182,10 @@ watch(pendingLoadingList, (list, oldList) => {
   }
 }, { immediate: true })
 
+const submitting = ref(false)
+
 async function submitLoading() {
+  if (submitting.value) return
   if (!selectedTask.value) {
     await ElMessageBox.alert('请先在上方清单中选择一个需要补料的物料。', '提交失败', { type: 'error' })
     return
@@ -195,19 +198,47 @@ async function submitLoading() {
     await ElMessageBox.alert('补充数量必须大于 0。', '提交失败', { type: 'error' })
     return
   }
-  // 注意：当前后端没有专门的「新增上料记录」接口，这里仅把本次录入的数量累加到当前选中行的 actualQuantity，
-  // 以反馈录入成功；真正写入 smt_loading_records 需由后端补充对应的 POST 接口后再替换此处逻辑。
-  const add = Number(form.ActualQuantity)
-  const totalNeeded = Number(selectedTask.value.bomQuantity) || 0
-  const currentLoaded = Number(selectedTask.value.actualQuantity) || 0
-  const next = Math.min(currentLoaded + add, totalNeeded)
-  selectedTask.value.actualQuantity = next
-  if (next >= totalNeeded) selectedTask.value.verifyStatus = 1
-  ElMessage.success(`物料 ${selectedTask.value.materialCode} 已记录补料 ${add}。`)
-  form.MaterialCode = ''
-  form.ActualQuantity = Math.max(totalNeeded - next, 0)
-  // 刷新顶部「待上料批次」列表（展示最新校验状态）
-  await loadPendingLoadingList()
+  if (!form.OperatorId) {
+    await ElMessageBox.alert('请先选择操作人。', '提交失败', { type: 'error' })
+    return
+  }
+
+  const lotId = currentBatch.value?.lotId
+  if (!lotId) {
+    await ElMessageBox.alert('当前批次信息不完整，无法提交上料。', '提交失败', { type: 'error' })
+    return
+  }
+
+  const payload = {
+    lotId,
+    materialCode: form.MaterialCode.trim(),
+    supplementQuantity: Number(form.ActualQuantity),
+    operatorId: Number(form.OperatorId),
+  }
+
+  submitting.value = true
+  try {
+    await supplementMaterial(payload)
+    const add = Number(form.ActualQuantity)
+    const totalNeeded = Number(selectedTask.value.bomQuantity) || 0
+    const currentLoaded = Number(selectedTask.value.actualQuantity) || 0
+    const next = Math.min(currentLoaded + add, totalNeeded)
+    selectedTask.value.actualQuantity = next
+    if (next >= totalNeeded) selectedTask.value.verifyStatus = 1
+    ElMessage.success(`物料 ${selectedTask.value.materialCode} 已记录补料 ${add}。`)
+    form.MaterialCode = ''
+    form.ActualQuantity = Math.max(totalNeeded - next, 0)
+    // 刷新顶部「待上料批次」列表与当前批次详情
+    await Promise.all([
+      loadPendingLoadingList(),
+      loadBatchDetail(lotId),
+    ])
+  } catch (error) {
+    // request 拦截器已经弹出错误消息，这里仅兜底输出
+    console.error('supplement material failed:', error)
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -324,7 +355,7 @@ async function submitLoading() {
                 </el-select>
               </el-form-item>
               <div class="form-actions">
-                <el-button type="primary" size="large" class="big-action" @click="submitLoading">保存上料</el-button>
+                <el-button type="primary" size="large" class="big-action" :loading="submitting" @click="submitLoading">保存上料</el-button>
               </div>
             </el-form>
           </template>
