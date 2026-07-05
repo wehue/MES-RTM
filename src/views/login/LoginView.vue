@@ -1,40 +1,85 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Lock, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Lock, OfficeBuilding, Phone, User, UserFilled } from '@element-plus/icons-vue'
+import { loginUser, registerUser } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { firstAccessiblePath, ROLES } from '@/utils/constants'
+import { ROLES } from '@/utils/constants'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const loginForm = ref({
+const activeMode = ref('login')
+const loginForm = reactive({
   username: 'admin',
   password: '123456',
-  role: 'admin',
+})
+const registerForm = reactive({
+  username: '',
+  password: '',
+  fullName: '',
+  department: 'SMT车间',
+  position: '操作工',
+  contact: '',
 })
 const loading = ref(false)
 
-const roleName = computed(() => ROLES.find((item) => item.value === loginForm.value.role)?.label || '工厂管理层')
+const positionOptions = computed(() => ROLES.map((item) => item.label))
+const panelTitle = computed(() => activeMode.value === 'login' ? '系统登录' : '用户注册')
+const panelDesc = computed(() => activeMode.value === 'login'
+  ? '使用系统账号与密码进入生产执行工作台。'
+  : '创建新的 MES-RTM 系统用户账号。')
+
+function switchMode(mode) {
+  activeMode.value = mode
+}
+
+function compactPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
+  )
+}
 
 async function handleLogin() {
+  if (!loginForm.username.trim() || !loginForm.password) {
+    ElMessage.warning('请输入用户名和密码')
+    return
+  }
   loading.value = true
   try {
-    userStore.setToken('mock-token')
-    userStore.setUserInfo({
-      id: 'U001',
-      username: loginForm.value.username,
-      name: roleName.value,
-      department: loginForm.value.role === 'quality_engineer' ? '质量部' : '生产部',
-      post: roleName.value,
-      role: loginForm.value.role,
-      roles: [loginForm.value.role],
-      lines: loginForm.value.role === 'team_leader' || loginForm.value.role === 'operator'
-        ? ['SMT-A1', 'SMT-A2']
-        : ['SMT-A1', 'SMT-A2', 'SMT-B1', 'SMT-B2'],
+    const result = await loginUser({
+      username: loginForm.username.trim(),
+      password: loginForm.password,
     })
-    router.push(route.query.redirect || firstAccessiblePath(loginForm.value.role))
+    if (!result?.token) {
+      ElMessage.error('登录响应缺少 token，请检查后端接口返回')
+      return
+    }
+    userStore.setToken(result.token)
+    userStore.setUserInfo(result)
+    await userStore.fetchCurrentFunctions()
+    ElMessage.success('登录成功')
+    router.push(route.query.redirect || userStore.firstAccessiblePath())
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleRegister() {
+  if (!registerForm.username.trim() || !registerForm.password) {
+    ElMessage.warning('注册账号和密码为必填项')
+    return
+  }
+  loading.value = true
+  try {
+    const payload = compactPayload(registerForm)
+    const result = await registerUser(payload)
+    ElMessage.success(`用户 ${result?.username || payload.username} 注册成功`)
+    loginForm.username = payload.username
+    loginForm.password = payload.password
+    switchMode('login')
   } finally {
     loading.value = false
   }
@@ -76,23 +121,54 @@ async function handleLogin() {
 
       <div class="login-panel">
         <div class="panel-title">
-          <h2>系统登录</h2>
-          <p>选择角色后进入对应权限范围的业务页面。</p>
+          <h2>{{ panelTitle }}</h2>
+          <p>{{ panelDesc }}</p>
         </div>
-        <el-form :model="loginForm" class="login-form" @submit.prevent="handleLogin">
+
+        <div class="mode-switch" role="tablist" aria-label="登录注册切换">
+          <button type="button" :class="{ active: activeMode === 'login' }" @click="switchMode('login')">
+            登录
+          </button>
+          <button type="button" :class="{ active: activeMode === 'register' }" @click="switchMode('register')">
+            注册
+          </button>
+        </div>
+
+        <el-form v-if="activeMode === 'login'" :model="loginForm" class="login-form" @submit.prevent="handleLogin">
           <el-form-item>
             <el-input v-model="loginForm.username" :prefix-icon="User" size="large" placeholder="请输入用户名" />
           </el-form-item>
           <el-form-item>
             <el-input v-model="loginForm.password" :prefix-icon="Lock" type="password" size="large" show-password placeholder="请输入密码" />
           </el-form-item>
-          <el-form-item>
-            <el-select v-model="loginForm.role" size="large" class="role-select" placeholder="选择演示角色">
-              <el-option v-for="role in ROLES" :key="role.value" :label="role.label" :value="role.value" />
-            </el-select>
-          </el-form-item>
           <el-button type="primary" size="large" :loading="loading" class="login-btn" native-type="submit">
             登录系统
+          </el-button>
+        </el-form>
+
+        <el-form v-else :model="registerForm" class="login-form register-form" @submit.prevent="handleRegister">
+          <el-form-item class="full">
+            <el-input v-model="registerForm.username" :prefix-icon="User" size="large" placeholder="用户账号（必填）" />
+          </el-form-item>
+          <el-form-item class="full">
+            <el-input v-model="registerForm.password" :prefix-icon="Lock" type="password" size="large" show-password placeholder="登录密码（必填）" />
+          </el-form-item>
+          <el-form-item>
+            <el-input v-model="registerForm.fullName" :prefix-icon="UserFilled" size="large" placeholder="真实姓名" />
+          </el-form-item>
+          <el-form-item>
+            <el-select v-model="registerForm.position" size="large" class="role-select" placeholder="岗位">
+              <el-option v-for="position in positionOptions" :key="position" :label="position" :value="position" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-input v-model="registerForm.department" :prefix-icon="OfficeBuilding" size="large" placeholder="所属部门" />
+          </el-form-item>
+          <el-form-item>
+            <el-input v-model="registerForm.contact" :prefix-icon="Phone" size="large" placeholder="联系方式" />
+          </el-form-item>
+          <el-button type="primary" size="large" :loading="loading" class="login-btn" native-type="submit">
+            创建账号
           </el-button>
         </el-form>
       </div>
@@ -243,6 +319,49 @@ async function handleLogin() {
   }
 }
 
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 4px;
+  border: 1px solid #d8dee6;
+  border-radius: 6px;
+  background: #f3f6f9;
+}
+
+.mode-switch button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #526170;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mode-switch button.active {
+  background: #1f5f99;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(31, 95, 153, 0.22);
+}
+
+.login-form :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.register-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.register-form .full,
+.register-form .login-btn {
+  grid-column: 1 / -1;
+}
+
 .role-select,
 .login-btn {
   width: 100%;
@@ -255,6 +374,10 @@ async function handleLogin() {
 
   .login-info {
     display: none;
+  }
+
+  .register-form {
+    grid-template-columns: 1fr;
   }
 }
 </style>

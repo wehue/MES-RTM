@@ -20,67 +20,87 @@ export const PERMISSION_CODES = {
   SYSTEM: 'system',
 }
 
-export const ROLE_PERMISSIONS = {
-  production_manager: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.WORK_ORDER,
-    PERMISSION_CODES.BATCH,
-    PERMISSION_CODES.TRACKING,
-    PERMISSION_CODES.DEVICE,
-    PERMISSION_CODES.SYSTEM,
-  ],
-  team_leader: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.LOADING,
-    PERMISSION_CODES.CHECK_IN,
-    PERMISSION_CODES.CHECK_OUT,
-    PERMISSION_CODES.TRACKING,
-    PERMISSION_CODES.DEVICE,
-    PERMISSION_CODES.SYSTEM,
-  ],
-  operator: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.LOADING,
-    PERMISSION_CODES.CHECK_IN,
-    PERMISSION_CODES.CHECK_OUT,
-    PERMISSION_CODES.TRACKING,
-    PERMISSION_CODES.SYSTEM,
-  ],
-  quality_engineer: [
-    PERMISSION_CODES.DASHBOARD,
-    PERMISSION_CODES.KANBAN,
-    PERMISSION_CODES.BATCH,
-    PERMISSION_CODES.CHECK_OUT,
-    PERMISSION_CODES.REPAIR,
-    PERMISSION_CODES.TRACKING,
-    PERMISSION_CODES.DEVICE,
-    PERMISSION_CODES.SYSTEM,
-  ],
-  admin: Object.values(PERMISSION_CODES),
+export const BACKEND_FUNCTION_PERMISSION_MAP = {
+  dashboard: [PERMISSION_CODES.DASHBOARD],
+  kanban: [PERMISSION_CODES.KANBAN],
+  work_order: [PERMISSION_CODES.WORK_ORDER],
+  batch: [PERMISSION_CODES.BATCH],
+  loading: [PERMISSION_CODES.LOADING],
+  check_in: [PERMISSION_CODES.CHECK_IN],
+  check_out: [PERMISSION_CODES.CHECK_OUT],
+  tracking: [PERMISSION_CODES.TRACKING],
+  repair: [PERMISSION_CODES.REPAIR],
+  device: [PERMISSION_CODES.DEVICE],
+  equipment: [PERMISSION_CODES.DEVICE],
+  system: [PERMISSION_CODES.SYSTEM],
+  user: [PERMISSION_CODES.SYSTEM],
+  role: [PERMISSION_CODES.SYSTEM],
+  WO_MANAGE: [PERMISSION_CODES.WORK_ORDER],
+  BATCH_MANAGE: [PERMISSION_CODES.BATCH],
+  LINE_LOAD_MONITOR: [PERMISSION_CODES.DASHBOARD],
+  SCHEDULE_BOARD: [PERMISSION_CODES.DASHBOARD, PERMISSION_CODES.KANBAN],
+  INBOUND_MANAGE: [PERMISSION_CODES.CHECK_IN],
+  LOADING_TASK_VIEW: [PERMISSION_CODES.LOADING],
+  INBOUND_LOADING_CHECK: [PERMISSION_CODES.CHECK_IN, PERMISSION_CODES.LOADING],
+  OUTBOUND_MANAGE: [PERMISSION_CODES.CHECK_OUT],
+  REPAIR_MANAGE: [PERMISSION_CODES.REPAIR],
+  QUALITY_JUDGE_INTERCEPT: [PERMISSION_CODES.BATCH, PERMISSION_CODES.CHECK_OUT, PERMISSION_CODES.REPAIR],
+  PARAM_QUALITY_RELATE_QUERY: [PERMISSION_CODES.TRACKING],
+  LINE_STATUS_BOARD: [PERMISSION_CODES.KANBAN],
+  QUALITY_BOARD: [PERMISSION_CODES.KANBAN],
+  PARAM_TEMPLATE_SELECT: [PERMISSION_CODES.DEVICE],
+  PARAM_ISSUE: [PERMISSION_CODES.DEVICE],
+  PARAM_CONSISTENCY_CHECK: [PERMISSION_CODES.DEVICE],
 }
 
-export const ROLE_HOME_PATH = {
-  production_manager: '/production/work-order',
-  team_leader: '/execution/loading',
-  operator: '/execution/loading',
-  quality_engineer: '/execution/repair',
-  admin: '/dashboard',
+export const PERMISSION_HOME_PATH = [
+  { permission: PERMISSION_CODES.DASHBOARD, path: '/dashboard' },
+  { permission: PERMISSION_CODES.WORK_ORDER, path: '/production/work-order' },
+  { permission: PERMISSION_CODES.BATCH, path: '/production/batch' },
+  { permission: PERMISSION_CODES.LOADING, path: '/execution/loading' },
+  { permission: PERMISSION_CODES.CHECK_IN, path: '/execution/check-in' },
+  { permission: PERMISSION_CODES.CHECK_OUT, path: '/execution/check-out' },
+  { permission: PERMISSION_CODES.REPAIR, path: '/execution/repair' },
+  { permission: PERMISSION_CODES.TRACKING, path: '/execution/tracking' },
+  { permission: PERMISSION_CODES.DEVICE, path: '/device' },
+  { permission: PERMISSION_CODES.KANBAN, path: '/kanban/line-status' },
+]
+
+export function normalizeFunctionList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.list)) return payload.list
+  if (Array.isArray(payload?.records)) return payload.records
+  return []
+}
+
+export function functionListToPermissionCodes(functions = []) {
+  const codes = new Set()
+  normalizeFunctionList(functions).forEach((item) => {
+    const rawCode = item?.functionCode || item?.FunctionCode || item
+    const functionCode = typeof rawCode === 'string' ? rawCode.trim() : rawCode
+    const normalizedCode = typeof functionCode === 'string' ? functionCode.replace(/-/g, '_').toLowerCase() : functionCode
+    const upperCode = typeof functionCode === 'string' ? functionCode.toUpperCase() : functionCode
+    const permissions = BACKEND_FUNCTION_PERMISSION_MAP[functionCode]
+      || BACKEND_FUNCTION_PERMISSION_MAP[normalizedCode]
+      || BACKEND_FUNCTION_PERMISSION_MAP[upperCode]
+      || []
+    permissions.forEach((permission) => codes.add(permission))
+  })
+  codes.add(PERMISSION_CODES.SYSTEM)
+  return [...codes]
+}
+
+export function hasBackendPermission(permissionCodes = [], permission) {
+  if (!permission || permission === PERMISSION_CODES.SYSTEM) return true
+  return permissionCodes.includes(permission)
+}
+
+export function firstAccessiblePathByPermissions(permissionCodes = []) {
+  return PERMISSION_HOME_PATH.find((item) => hasBackendPermission(permissionCodes, item.permission))?.path || '/system/profile'
 }
 
 export function isRtmRole(role) {
-  return role === 'admin' || Boolean(ROLE_PERMISSIONS[role])
-}
-
-export function roleHasPermission(role, permission) {
-  if (!permission || role === 'admin') return true
-  return ROLE_PERMISSIONS[role]?.includes(permission) || false
-}
-
-export function firstAccessiblePath(role) {
-  return ROLE_HOME_PATH[role] || '/dashboard'
+  return ROLES.some((item) => item.value === role)
 }
 
 export const WORK_ORDER_STATUS = {

@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { firstAccessiblePath, isRtmRole, PERMISSION_CODES, roleHasPermission } from '@/utils/constants'
+import { useUserStore } from '@/stores/user'
+import { isRtmRole, PERMISSION_CODES } from '@/utils/constants'
 
 NProgress.configure({ showSpinner: false })
 
@@ -163,7 +164,7 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   NProgress.start()
   if (to.meta.noAuth) {
     return true
@@ -174,6 +175,7 @@ router.beforeEach((to) => {
   }
 
   try {
+    const userStore = useUserStore()
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
     const role = userInfo.role || 'admin'
     if (!isRtmRole(role)) {
@@ -181,12 +183,17 @@ router.beforeEach((to) => {
       localStorage.removeItem('userInfo')
       return { path: '/login', query: { redirect: to.fullPath } }
     }
+    await userStore.ensurePermissionsLoaded()
     const permission = to.meta.permission
-    if (permission && !roleHasPermission(role, permission)) {
-      return { path: firstAccessiblePath(role) }
+    if (permission && !userStore.hasPermission(permission)) {
+      return { path: userStore.firstAccessiblePath() }
     }
   } catch (e) {
     console.error('Failed to parse userInfo:', e)
+    localStorage.removeItem('token')
+    localStorage.removeItem('userInfo')
+    localStorage.removeItem('userFunctions')
+    localStorage.removeItem('permissionCodes')
     return { path: '/login', query: { redirect: to.fullPath } }
   }
   return true

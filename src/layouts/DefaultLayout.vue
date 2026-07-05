@@ -32,6 +32,7 @@ const roleLabel = computed(() => {
 const displayName = computed(() => userStore.userInfo.name || '系统管理员')
 const activeMenu = computed(() => route.meta?.activeMenu || route.path)
 const unreadCount = computed(() => messages.filter((item) => item.unread).length)
+const canViewKanban = computed(() => userStore.hasPermission(PERMISSION_CODES.KANBAN))
 const breadcrumbItems = computed(() => {
   const moduleTitle = route.meta?.module || '首页'
   const title = route.meta?.title || '生产驾驶舱'
@@ -162,7 +163,7 @@ function handleCommand(command) {
             <span>实时连接正常</span>
             <strong>30s 自动刷新</strong>
           </div>
-          <el-button class="kanban-entry" :icon="TrendCharts" @click="router.push('/kanban/line-status')">
+          <el-button v-if="canViewKanban" class="kanban-entry" :icon="TrendCharts" @click="router.push('/kanban/line-status')">
             大屏
           </el-button>
           <el-badge :value="unreadCount" :hidden="unreadCount === 0">

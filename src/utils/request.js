@@ -16,6 +16,7 @@ request.interceptors.request.use(
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+      config.headers.token = token
     }
     return config
   },
@@ -44,6 +45,9 @@ request.interceptors.response.use(
       const { status } = error.response
       if (status === 401) {
         localStorage.removeItem('token')
+        localStorage.removeItem('userInfo')
+        localStorage.removeItem('userFunctions')
+        localStorage.removeItem('permissionCodes')
         window.location.href = '/login'
       } else if (status === 403) {
         ElMessage.error('没有操作权限')
