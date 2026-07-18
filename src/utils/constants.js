@@ -1,9 +1,9 @@
 export const ROLES = [
-  { value: 'production_manager', label: '生产主管' },
-  { value: 'team_leader', label: '班组长' },
+  { value: 'production_supervisor', label: '生产主管' },
+  { value: 'leader', label: '班组长' },
   { value: 'operator', label: '操作工' },
   { value: 'quality_engineer', label: '质量工程师' },
-  { value: 'admin', label: '工厂管理层' },
+  { value: 'rtm_admin', label: 'RTM管理员' },
 ]
 
 export const PERMISSION_CODES = {

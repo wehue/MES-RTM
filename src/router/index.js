@@ -177,7 +177,7 @@ router.beforeEach(async (to) => {
   try {
     const userStore = useUserStore()
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
-    const role = userInfo.role || 'admin'
+    const role = userInfo.role || 'rtm_admin'
     if (!isRtmRole(role)) {
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')

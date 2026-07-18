@@ -108,11 +108,11 @@ export const users = reactive([
 ])
 
 export const roles = reactive([
-  { Id: 1, RoleCode: 'production_manager', RoleName: '生产主管', Description: '负责工单、批次计划与调度', ...auditFields() },
-  { Id: 2, RoleCode: 'team_leader', RoleName: '班组长', Description: '负责执行协调、进出站与设备查看', ...auditFields() },
-  { Id: 3, RoleCode: 'operator', RoleName: '操作工', Description: '负责上料、进站、出站与追溯查看', ...auditFields() },
-  { Id: 4, RoleCode: 'quality_engineer', RoleName: '质量工程师', Description: '负责质量异常和维修处理', ...auditFields() },
-  { Id: 5, RoleCode: 'admin', RoleName: '工厂管理层', Description: '系统全权限', ...auditFields() },
+  { Id: 1, RoleCode: 'rtm_admin', RoleName: 'RTM管理员', Description: 'MES-RTM 实时制造执行子系统管理员，拥有 RTM 端全部功能权限', ...auditFields() },
+  { Id: 2, RoleCode: 'production_supervisor', RoleName: '生产主管', Description: '负责工单、批次计划与调度', ...auditFields() },
+  { Id: 3, RoleCode: 'leader', RoleName: '班组长', Description: '负责执行协调、进站、上料、出站与异常跟进', ...auditFields() },
+  { Id: 4, RoleCode: 'operator', RoleName: '操作工', Description: '负责上料、进站、出站与追溯查看', ...auditFields() },
+  { Id: 5, RoleCode: 'quality_engineer', RoleName: '质量工程师', Description: '负责质量异常和维修处理', ...auditFields() },
 ])
 
 export const functions = reactive([

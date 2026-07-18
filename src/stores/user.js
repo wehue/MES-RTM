@@ -12,28 +12,7 @@ const savedFunctions = localStorage.getItem('userFunctions')
 const savedPermissions = localStorage.getItem('permissionCodes')
 const DEFAULT_LINES = ['SMT-A1', 'SMT-A2', 'SMT-B1', 'SMT-B2']
 
-const POSITION_ROLE_MAP = {
-  生产主管: 'production_manager',
-  班组长: 'team_leader',
-  操作工: 'operator',
-  质量工程师: 'quality_engineer',
-  工厂管理层: 'admin',
-  系统管理员: 'admin',
-  RTM管理员: 'admin',
-  RTM操作员: 'operator',
-}
-
-const ROLE_CODE_MAP = {
-  PRODUCTION_SUPERVISOR: 'production_manager',
-  LEADER: 'team_leader',
-  TEAM_LEADER: 'team_leader',
-  OPERATOR: 'operator',
-  RTM_OPERATOR: 'operator',
-  QUALITY_ENGINEER: 'quality_engineer',
-  ADMIN: 'admin',
-  RTM_ADMIN: 'admin',
-}
-
+// 定义默认用户信息
 const DEFAULT_USER = {
   id: 'U001',
   username: 'admin',
@@ -42,22 +21,32 @@ const DEFAULT_USER = {
   department: '生产部',
   post: '管理层',
   position: '管理层',
-  role: 'admin',
-  roles: ['admin'],
+  role: 'rtm_admin',
+  roles: ['rtm_admin'],
   lines: DEFAULT_LINES,
 }
 
 function inferRole(info = {}, fallbackRole = 'operator') {
-  const rawRole = info.role || info.roleCode
-  if (rawRole) return ROLE_CODE_MAP[rawRole] || rawRole
-  const roleName = info.roleName || info.position || info.post
-  return POSITION_ROLE_MAP[roleName] || fallbackRole
+  // 直接使用后端返回的 role / roleCode，不再做任何映射
+  if (info.role || info.roleCode) return info.role || info.roleCode
+  if (Array.isArray(info.roleCodes) && info.roleCodes.length > 0) {
+    return info.roleCodes[0] || fallbackRole
+  }
+  return fallbackRole
 }
 
 function normalizeUserInfo(info = {}, fallback = DEFAULT_USER) {
   const role = inferRole(info, fallback.role)
   const name = info.name || info.fullName || fallback.name || fallback.fullName || info.username || ''
   const position = info.position || info.post || fallback.position || fallback.post || ''
+
+  // 直接使用后端返回的 roleCodes / roles，不再做任何映射
+  let roles = [role]
+  if (Array.isArray(info.roleCodes) && info.roleCodes.length > 0) {
+    roles = [...info.roleCodes]
+  } else if (Array.isArray(info.roles) && info.roles.length > 0) {
+    roles = [...info.roles]
+  }
 
   return {
     id: info.id ?? info.userId ?? fallback.id,
@@ -70,7 +59,7 @@ function normalizeUserInfo(info = {}, fallback = DEFAULT_USER) {
     position,
     contact: info.contact || fallback.contact || '',
     role,
-    roles: Array.isArray(info.roles) && info.roles.length ? info.roles : [role],
+    roles,
     lines: Array.isArray(info.lines) && info.lines.length ? info.lines : (fallback.lines || DEFAULT_LINES),
   }
 }
@@ -126,11 +115,11 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function hasRole(role) {
-    return userInfo.value.role === 'admin' || userInfo.value.roles?.includes(role)
+    return userInfo.value.role === 'rtm_admin' || userInfo.value.roles?.includes(role)
   }
 
   function hasAnyRole(roles) {
-    return userInfo.value.role === 'admin' || roles.some((role) => userInfo.value.roles?.includes(role))
+    return userInfo.value.role === 'rtm_admin' || roles.some((role) => userInfo.value.roles?.includes(role))
   }
 
   function hasPermission(permission) {
