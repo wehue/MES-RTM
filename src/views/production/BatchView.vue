@@ -203,6 +203,7 @@ const generatedBatchRows = computed(() => {
 
 const allocatedTotal = computed(() => generatedBatchRows.value.reduce((sum, item) => sum + item.PlannedQuantity, 0))
 const allocationOverLimit = computed(() => allocatedTotal.value > remainingQty.value)
+const allocationIncomplete = computed(() => allocatedTotal.value < remainingQty.value)
 
 // 按当前工单计划数量与批次数自动平均分配（余数依次加到前若干个批次）
 function autoDistributeQuantities() {
@@ -350,6 +351,10 @@ async function submitCreateBatch() {
   }
   if (allocationOverLimit.value) {
     ElMessage.warning(`已分配数量 ${allocatedTotal.value} 超过可拆数量 ${remainingQty.value}，请调整`)
+    return
+  }
+  if (allocationIncomplete.value) {
+    ElMessage.warning(`还有 ${remainingQty.value - allocatedTotal.value} 未分配完，请调整或增加批次`)
     return
   }
   if (generatedBatchRows.value.some((item) => !item.LineCode)) {
@@ -567,11 +572,11 @@ async function operate(row, action) {
               <span>拆分预览</span>
               <el-button size="small" type="primary" plain @click="autoDistributeQuantities">平均分配</el-button>
             </div>
-            <div class="allocation-summary" :class="{ 'is-over': allocationOverLimit }">
+            <div class="allocation-summary" :class="{ 'is-over': allocationOverLimit, 'is-incomplete': allocationIncomplete }">
               <span>已分配：<strong>{{ allocatedTotal }}</strong></span>
               <span>可拆数量：<strong>{{ remainingQty }}</strong></span>
               <span v-if="allocationOverLimit" class="allocation-warning">超出 {{ allocatedTotal - remainingQty }}，请调整</span>
-              <span v-else-if="allocatedTotal < remainingQty" class="allocation-hint">未分完，剩余 {{ remainingQty - allocatedTotal }} 将不创建批次</span>
+              <span v-else-if="allocationIncomplete" class="allocation-hint">未分完，剩余 {{ remainingQty - allocatedTotal }} 需分配完才能创建</span>
               <span v-else class="allocation-ok">分配完成</span>
             </div>
             <el-table :data="generatedBatchRows" border size="small" max-height="380">
@@ -620,7 +625,7 @@ async function operate(row, action) {
       <template #footer>
         <div class="dialog-actions">
           <el-button @click="createDialogVisible = false">取消</el-button>
-          <el-button type="primary" :disabled="!selectedWorkOrder || !availableWorkOrders.length || !canPlanBatch || allocationOverLimit" @click="submitCreateBatch">确认创建</el-button>
+          <el-button type="primary" :disabled="!selectedWorkOrder || !availableWorkOrders.length || !canPlanBatch || allocationOverLimit || allocationIncomplete" @click="submitCreateBatch">确认创建</el-button>
         </div>
       </template>
     </el-dialog>
@@ -733,13 +738,24 @@ async function operate(row, action) {
   font-size: 15px;
 }
 
-.allocation-summary.is-over {
+.allocation-summary.is-over,
+.allocation-summary.is-incomplete {
   background: #fef2f2;
   color: #b91c1c;
 }
 
-.allocation-summary.is-over strong {
+.allocation-summary.is-over strong,
+.allocation-summary.is-incomplete strong {
   color: #b91c1c;
+}
+
+.allocation-summary.is-incomplete {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.allocation-summary.is-incomplete strong {
+  color: #b45309;
 }
 
 .allocation-warning {
