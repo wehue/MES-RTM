@@ -1,120 +1,175 @@
--- MES-RTM default auth seed data.
--- Import this script after the base schema has been created.
--- Default password for all seeded users: 123456
+-- MES-RTM 权限元数据种子 SQL
+-- =====================================================================
+-- 用途：后端 Spring Boot 启动时自动初始化权限元数据
+-- 使用方式：将本文件复制到后端项目 src/main/resources/data.sql
+--
+-- Spring Boot 配置（application.yml）：
+--   spring:
+--     sql:
+--       init:
+--         mode: always          # 每次启动都执行（靠 ON DUPLICATE KEY 保证幂等）
+--         continue-on-error: false
+--     # 若使用 JPA，还需配置 defer-datasource-initialization: true
+--     jpa:
+--       defer-datasource-initialization: true
+--
+-- 幂等说明：
+--   - smt_roles / smt_functions 使用 INSERT ... ON DUPLICATE KEY UPDATE
+--   - smt_role_functions 使用先 DELETE 种子 ID 范围再 INSERT，避免重复
+--   - 多次执行结果一致，不会产生重复数据
+-- =====================================================================
 
 SET NAMES utf8mb4;
 
-INSERT INTO smt_roles
-  (RoleCode, RoleName, Description, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
+-- ---------------------------------------------------------------------
+-- 0. 清理脏数据（历史误录入的中文 FunctionCode）
+-- ---------------------------------------------------------------------
+DELETE FROM `smt_functions` WHERE `Id` = 17 OR `FunctionCode` = 'PARAM_CONSISTENCY_CHECK是';
+
+-- ---------------------------------------------------------------------
+-- 1. 角色定义 smt_roles
+--    字段：Id, RoleCode, RoleName, Description, CreatedAt, CreatedBy,
+--          UpdatedAt, UpdatedBy, IsDeleted, LastOperationType, ?
+-- ---------------------------------------------------------------------
+INSERT INTO `smt_roles`
+  (`Id`, `RoleCode`, `RoleName`, `Description`, `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy`, `IsDeleted`, `LastOperationType`, `Remark`)
 VALUES
-  ('RTM_ADMIN', 'RTM管理员', 'MES-RTM 实时制造执行子系统管理员，拥有 RTM 端全部功能权限', 'seed', 'seed', 0, 1),
-  ('PRODUCTION_SUPERVISOR', '生产主管', '负责工单、批次计划与调度，统筹产线生产执行与工单收尾', 'seed', 'seed', 0, 1),
-  ('LEADER', '班组长', '负责现场执行协调、进站、上料、出站与异常跟进', 'seed', 'seed', 0, 1),
-  ('OPERATOR', '操作工', '负责上料、进站、出站、批次执行数据录入', 'seed', 'seed', 0, 1),
-  ('QUALITY_ENGINEER', '质量工程师', '负责质量拦截、维修处理和参数质量追溯', 'seed', 'seed', 0, 1)
+  (1, 'RTM_ADMIN', 'RTM管理员', 'MES-RTM 实时制造执行子系统管理员，拥有 RTM 端全部功能权限', '2026-05-25 11:03:05.713', 'system', '2026-07-21 16:14:29.967', 'seed', b'0', 2, NULL),
+  (2, 'QUALITY_ENGINEER', '质量工程师', '负责质量拦截、维修处理和参数质量追溯', '2026-05-25 11:03:10.827', 'system', '2026-07-21 16:14:30.883', 'seed', b'0', 2, NULL),
+  (3, 'PRODUCTION_SUPERVISOR', '生产主管', '负责工单、批次计划与调度，统筹产线生产执行与工单收尾', '2026-05-25 11:03:17.424', 'system', '2026-07-21 16:14:31.840', 'seed', b'0', 2, NULL),
+  (4, 'OPERATOR', '操作工', '负责上料、进站、出站、批次执行数据录入', '2026-06-21 20:21:34.000', 'system', '2026-07-21 16:14:32.781', 'seed', b'0', 2, NULL),
+  (5, 'LEADER', '班组长', '负责现场执行协调、进站、上料、出站与异常跟进', '2026-07-05 21:50:08.193', 'seed', '2026-07-21 16:14:35.310', 'seed', b'0', 1, NULL)
 ON DUPLICATE KEY UPDATE
-  RoleName = VALUES(RoleName),
-  Description = VALUES(Description),
-  UpdatedBy = 'seed',
-  IsDeleted = 0,
-  LastOperationType = 2;
+  `RoleCode` = VALUES(`RoleCode`),
+  `RoleName` = VALUES(`RoleName`),
+  `Description` = VALUES(`Description`),
+  `IsDeleted` = b'0',
+  `UpdatedBy` = 'seed',
+  `LastOperationType` = 2;
 
-INSERT INTO smt_functions
-  (FunctionCode, FunctionName, Description, CreatedBy, UpdatedBy, IsDeleted, LastOperationType, Subsystem)
+-- ---------------------------------------------------------------------
+-- 2. 功能定义 smt_functions
+--    字段：Id, FunctionCode, FunctionName, Description, CreatedAt, CreatedBy,
+--          UpdatedAt, UpdatedBy, IsDeleted, LastOperationType, ?, Subsystem
+--
+--    说明：包含两套功能码
+--      - ID 1-16：历史大写功能码（WO_MANAGE 等），保留但未分配给角色
+--      - ID 18-28：当前使用的小写功能码（dashboard 等），实际权限校验用这套
+--    前端 BACKEND_FUNCTION_PERMISSION_MAP 对两套码都做了映射
+-- ---------------------------------------------------------------------
+INSERT INTO `smt_functions`
+  (`Id`, `FunctionCode`, `FunctionName`, `Description`, `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy`, `IsDeleted`, `LastOperationType`, `Remark`, `Subsystem`)
 VALUES
-  ('dashboard', '首页', '生产驾驶舱、产线负载和核心指标总览', 'seed', 'seed', 0, 1, 2),
-  ('kanban', '看板中心', '产线状态看板、质量看板和生产进度看板', 'seed', 'seed', 0, 1, 2),
-  ('work_order', '工单管理', '查看工单列表，支持创建、释放、暂停、关闭工单', 'seed', 'seed', 0, 1, 2),
-  ('batch', '批次管理', '创建、锁定批次，记录批次状态和当前工序', 'seed', 'seed', 0, 1, 2),
-  ('loading', '上料管理', '显示当前批次所需上料的站位物料清单并执行补料', 'seed', 'seed', 0, 1, 2),
-  ('check_in', '进站操作', '校验批次进站权限并记录进站数量和设备', 'seed', 'seed', 0, 1, 2),
-  ('check_out', '出站操作', '记录出站时间、完工数量、不良数量和处置方式', 'seed', 'seed', 0, 1, 2),
-  ('tracking', '批次跟踪', '查询批次工艺参数、上料记录和质量结果', 'seed', 'seed', 0, 1, 2),
-  ('repair', '维修管理', '查看待维修批次并记录维修情况', 'seed', 'seed', 0, 1, 2),
-  ('equipment', '设备管理', '设备档案、设备状态、设备类型管理', 'seed', 'seed', 0, 1, 2),
-  ('system', '系统中心', '个人中心、消息通知和基础系统入口', 'seed', 'seed', 0, 1, 2)
+  (1, 'WO_MANAGE', '工单管理', '查看工单列表，支持创建、释放、暂停、关闭工单，展示工单号、产品型号、计划数量、交货期、状态、分配产线信息', '2026-05-25 11:27:51.440', 'system', '2026-05-25 11:27:51.440', 'system', b'0', 1, NULL, 2),
+  (2, 'BATCH_MANAGE', '批次管理', '创建、删除、锁定批次，记录批次状态，展示批次计划数量、已完成数量、当前所在工序、预计完成时间', '2026-05-25 11:27:56.115', 'system', '2026-05-25 11:27:56.115', 'system', b'0', 1, NULL, 2),
+  (3, 'LINE_LOAD_MONITOR', '产线负载监控', '实时显示各产线的当前产能利用率、在制品数量、预计完工时间', '2026-05-25 11:28:00.076', 'system', '2026-05-25 11:28:00.076', 'system', b'0', 1, NULL, 2),
+  (4, 'SCHEDULE_BOARD', '排程看板', '以甘特图形式展示各产线/设备的工单排程，显示当前工单进度百分比', '2026-05-25 11:28:04.785', 'system', '2026-05-25 11:28:04.785', 'system', b'0', 1, NULL, 2),
+  (5, 'INBOUND_MANAGE', '进站管理', '按工艺路线校验批次进站权限，记录进站数量、选择设备、执行上料操作', '2026-05-25 11:28:09.764', 'system', '2026-05-25 11:28:09.764', 'system', b'0', 1, NULL, 2),
+  (6, 'LOADING_TASK_VIEW', '上料任务列表查看', '显示当前批次所需上料的站位物料清单，包含站位号、物料料号、规格、应上数量', '2026-05-25 11:28:14.710', 'system', '2026-05-25 11:28:14.710', 'system', b'0', 1, NULL, 2),
+  (7, 'INBOUND_LOADING_CHECK', '进站前上料校验', '扫描物料条码与站位码，系统自动校验物料是否与BOM一致', '2026-05-25 11:28:19.334', 'system', '2026-05-25 11:28:19.334', 'system', b'0', 1, NULL, 2),
+  (8, 'OUTBOUND_MANAGE', '出站管理', '记录出站时间、完工数量、不良数量，支持维修、报废、强制出站三种处置方式', '2026-05-25 11:28:25.756', 'system', '2026-05-25 11:28:25.756', 'system', b'0', 1, NULL, 2),
+  (9, 'REPAIR_MANAGE', '维修管理', '显示维修概览卡片，查看待维修批次列表，记录批次维修情况', '2026-05-25 11:28:30.420', 'system', '2026-05-25 11:28:30.420', 'system', b'0', 1, NULL, 2),
+  (10, 'QUALITY_JUDGE_INTERCEPT', '质量判定与拦截', '设置SPI、AOI检测数据阈值，批次直通率低于阈值时自动锁定该批次，禁止继续产出', '2026-05-25 11:28:34.575', 'system', '2026-05-25 11:28:34.575', 'system', b'0', 1, NULL, 2),
+  (11, 'PARAM_QUALITY_RELATE_QUERY', '参数质量关联查询', '输入批次号或时间范围，查看该批次的所有工艺参数记录与对应的SPI/AOI质量检测结果', '2026-05-25 11:28:38.579', 'system', '2026-05-25 11:28:38.579', 'system', b'0', 1, NULL, 2),
+  (12, 'LINE_STATUS_BOARD', '产线状态看板', '大屏展示当前生产工单、计划数量/已完成数量、完成率、设备状态', '2026-05-25 11:28:42.995', 'system', '2026-05-25 11:28:42.995', 'system', b'0', 1, NULL, 2),
+  (13, 'QUALITY_BOARD', '质量看板', '实时展示当天批次SPI直通率、AOI直通率、当天批次良率', '2026-05-25 11:28:47.427', 'system', '2026-05-25 11:28:47.427', 'system', b'0', 1, NULL, 2),
+  (14, 'PARAM_TEMPLATE_SELECT', '参数模板选择', '换线时根据当前工单的产品型号自动匹配对应的工艺参数模板', '2026-05-25 11:28:52.354', 'system', '2026-05-25 11:28:52.354', 'system', b'0', 1, NULL, 2),
+  (15, 'PARAM_ISSUE', '参数下发', '将参数模板下发至印刷机、回流炉、SPI、AOI设备，支持手动触发和自动下发', '2026-05-25 11:28:56.142', 'system', '2026-05-25 11:28:56.142', 'system', b'0', 1, NULL, 2),
+  (16, 'PARAM_CONSISTENCY_CHECK', '参数一致性校验', '读取设备实际参数与模板参数对比，差异超标则锁定设备并提示', '2026-05-25 11:29:00.627', 'system', '2026-05-25 11:29:00.627', 'system', b'0', 1, NULL, 2),
+  (18, 'dashboard', '首页', '生产驾驶舱、产线负载和核心指标总览', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (19, 'kanban', '看板中心', '产线状态看板、质量看板和生产进度看板', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (20, 'work_order', '工单管理', '查看工单列表，支持创建、释放、暂停、关闭工单', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (21, 'batch', '批次管理', '创建、锁定批次，记录批次状态和当前工序', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (22, 'loading', '上料管理', '显示当前批次所需上料的站位物料清单并执行补料', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (23, 'check_in', '进站操作', '校验批次进站权限并记录进站数量和设备', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (24, 'check_out', '出站操作', '记录出站时间、完工数量、不良数量和处置方式', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (25, 'tracking', '批次跟踪', '查询批次工艺参数、上料记录和质量结果', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (26, 'repair', '维修管理', '查看待维修批次并记录维修情况', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (27, 'equipment', '设备管理', '设备档案、设备状态、设备类型管理', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2),
+  (28, 'system', '系统中心', '个人中心、消息通知和基础系统入口', '2026-07-05 21:50:08.240', 'seed', '2026-07-05 21:50:08.240', 'seed', b'0', 1, NULL, 2)
 ON DUPLICATE KEY UPDATE
-  FunctionName = VALUES(FunctionName),
-  Description = VALUES(Description),
-  UpdatedBy = 'seed',
-  IsDeleted = 0,
-  LastOperationType = 2,
-  Subsystem = VALUES(Subsystem);
+  `FunctionCode` = VALUES(`FunctionCode`),
+  `FunctionName` = VALUES(`FunctionName`),
+  `Description` = VALUES(`Description`),
+  `IsDeleted` = b'0',
+  `UpdatedBy` = 'seed',
+  `LastOperationType` = 2,
+  `Subsystem` = VALUES(`Subsystem`);
 
-INSERT INTO smt_users
-  (Username, PasswordHash, FullName, Department, Position, Contact, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
+-- ---------------------------------------------------------------------
+-- 3. 角色-功能映射 smt_role_functions
+--    字段：Id, RoleId, FunctionId, CreatedAt, CreatedBy,
+--          UpdatedAt, UpdatedBy, IsDeleted, LastOperationType, ?
+--
+--    策略：先删除种子数据 ID 范围（1-42），再重新插入
+--    这样保证幂等，且不影响手动新增的关联（Id > 42）
+--
+--    权限分配矩阵：
+--      RTM_ADMIN(1)              → 18-28（全部 11 个功能）
+--      PRODUCTION_SUPERVISOR(3)  → 18,19,20,21,25,27,28（计划阶段）
+--      LEADER(5)                 → 18,19,22,23,24,25,26,27,28（执行阶段）
+--      OPERATOR(4)               → 18,19,22,23,24,25,28（执行阶段）
+--      QUALITY_ENGINEER(2)       → 18,19,21,24,25,26,27,28（监控阶段）
+-- ---------------------------------------------------------------------
+DELETE FROM `smt_role_functions` WHERE `Id` BETWEEN 1 AND 42;
+
+INSERT INTO `smt_role_functions`
+  (`Id`, `RoleId`, `FunctionId`, `CreatedAt`, `CreatedBy`, `UpdatedAt`, `UpdatedBy`, `IsDeleted`, `LastOperationType`, `Remark`)
 VALUES
-  ('admin', 'e10adc3949ba59abbe56e057f20f883e', '系统管理员', '信息部', 'RTM管理员', 'admin@factory.local', 'seed', 'seed', 0, 1),
-  ('pm01', 'e10adc3949ba59abbe56e057f20f883e', '王主管', '生产部', '生产主管', 'pm01@factory.local', 'seed', 'seed', 0, 1),
-  ('tl01', 'e10adc3949ba59abbe56e057f20f883e', '李班长', 'SMT车间', '班组长', 'tl01@factory.local', 'seed', 'seed', 0, 1),
-  ('op01', 'e10adc3949ba59abbe56e057f20f883e', '张工', 'SMT车间', '操作工', 'op01@factory.local', 'seed', 'seed', 0, 1),
-  ('qe01', 'e10adc3949ba59abbe56e057f20f883e', '质量工程师', '质量部', '质量工程师', 'qe01@factory.local', 'seed', 'seed', 0, 1)
-ON DUPLICATE KEY UPDATE
-  PasswordHash = VALUES(PasswordHash),
-  FullName = VALUES(FullName),
-  Department = VALUES(Department),
-  Position = VALUES(Position),
-  Contact = VALUES(Contact),
-  UpdatedBy = 'seed',
-  IsDeleted = 0,
-  LastOperationType = 2;
+  -- RTM_ADMIN (RoleId=1) → 全部功能
+  (1,  1, 21, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (2,  1, 23, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (3,  1, 24, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (4,  1, 18, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (5,  1, 27, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (6,  1, 19, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (7,  1, 22, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (8,  1, 26, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (9,  1, 28, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (10, 1, 25, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  (11, 1, 20, '2026-07-05 21:50:08.259', 'seed', '2026-07-05 21:50:08.259', 'seed', b'0', 1, NULL),
+  -- PRODUCTION_SUPERVISOR (RoleId=3) → 计划阶段
+  (12, 3, 21, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (13, 3, 18, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (14, 3, 27, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (15, 3, 19, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (16, 3, 28, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (17, 3, 25, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  (18, 3, 20, '2026-07-05 21:50:08.272', 'seed', '2026-07-05 21:50:08.272', 'seed', b'0', 1, NULL),
+  -- LEADER (RoleId=5) → 执行阶段
+  (19, 5, 23, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (20, 5, 24, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (21, 5, 18, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (22, 5, 27, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (23, 5, 19, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (24, 5, 22, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (25, 5, 26, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (26, 5, 28, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  (27, 5, 25, '2026-07-05 21:50:08.275', 'seed', '2026-07-05 21:50:08.275', 'seed', b'0', 1, NULL),
+  -- OPERATOR (RoleId=4) → 执行阶段
+  (28, 4, 23, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (29, 4, 24, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (30, 4, 18, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (31, 4, 19, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (32, 4, 22, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (33, 4, 28, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  (34, 4, 25, '2026-07-05 21:50:08.281', 'seed', '2026-07-05 21:50:08.281', 'seed', b'0', 1, NULL),
+  -- QUALITY_ENGINEER (RoleId=2) → 监控阶段
+  (35, 2, 21, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (36, 2, 24, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (37, 2, 18, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (38, 2, 27, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (39, 2, 19, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (40, 2, 26, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (41, 2, 28, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL),
+  (42, 2, 25, '2026-07-05 21:50:08.284', 'seed', '2026-07-05 21:50:08.284', 'seed', b'0', 1, NULL);
 
-INSERT INTO smt_role_functions
-  (RoleId, FunctionId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT r.Id, f.Id, 'seed', 'seed', 0, 1
-FROM smt_roles r
-JOIN smt_functions f
-WHERE r.RoleCode = 'RTM_ADMIN'
-  AND f.FunctionCode IN (
-    'dashboard', 'kanban', 'work_order', 'batch', 'loading',
-    'check_in', 'check_out', 'tracking', 'repair', 'equipment', 'system'
-  )
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
-
-INSERT INTO smt_role_functions
-  (RoleId, FunctionId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT r.Id, f.Id, 'seed', 'seed', 0, 1
-FROM smt_roles r
-JOIN smt_functions f
-WHERE r.RoleCode = 'PRODUCTION_SUPERVISOR'
-  AND f.FunctionCode IN ('dashboard', 'kanban', 'work_order', 'batch', 'tracking', 'equipment', 'system')
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
-
-INSERT INTO smt_role_functions
-  (RoleId, FunctionId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT r.Id, f.Id, 'seed', 'seed', 0, 1
-FROM smt_roles r
-JOIN smt_functions f
-WHERE r.RoleCode = 'LEADER'
-  AND f.FunctionCode IN ('dashboard', 'kanban', 'loading', 'check_in', 'check_out', 'tracking', 'repair', 'equipment', 'system')
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
-
-INSERT INTO smt_role_functions
-  (RoleId, FunctionId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT r.Id, f.Id, 'seed', 'seed', 0, 1
-FROM smt_roles r
-JOIN smt_functions f
-WHERE r.RoleCode = 'OPERATOR'
-  AND f.FunctionCode IN ('dashboard', 'kanban', 'loading', 'check_in', 'check_out', 'tracking', 'system')
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
-
-INSERT INTO smt_role_functions
-  (RoleId, FunctionId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT r.Id, f.Id, 'seed', 'seed', 0, 1
-FROM smt_roles r
-JOIN smt_functions f
-WHERE r.RoleCode = 'QUALITY_ENGINEER'
-  AND f.FunctionCode IN ('dashboard', 'kanban', 'batch', 'check_out', 'repair', 'tracking', 'equipment', 'system')
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
-
-INSERT INTO smt_user_roles
-  (UserId, RoleId, CreatedBy, UpdatedBy, IsDeleted, LastOperationType)
-SELECT u.Id, r.Id, 'seed', 'seed', 0, 1
-FROM smt_users u
-JOIN smt_roles r
-WHERE (u.Username = 'admin' AND r.RoleCode = 'RTM_ADMIN')
-   OR (u.Username = 'pm01' AND r.RoleCode = 'PRODUCTION_SUPERVISOR')
-   OR (u.Username = 'tl01' AND r.RoleCode = 'LEADER')
-   OR (u.Username = 'op01' AND r.RoleCode = 'OPERATOR')
-   OR (u.Username = 'qe01' AND r.RoleCode = 'QUALITY_ENGINEER')
-ON DUPLICATE KEY UPDATE IsDeleted = 0, UpdatedBy = 'seed', LastOperationType = 2;
+-- =====================================================================
+-- 注意事项：
+-- 1. 本文件不包含 smt_users / smt_user_roles 数据，用户账号由 MDM 管理
+-- 2. 若需联调测试账号，请手动执行：
+--    INSERT INTO smt_users (Username, PasswordHash, ...) VALUES ('admin', 'e10adc3949ba59abbe56e057f20f883e', ...);
+--    （密码明文 123456 的 MD5）
+-- 3. 前端 BACKEND_FUNCTION_PERMISSION_MAP 已覆盖本文件所有 FunctionCode
+-- 4. 多次执行本文件结果幂等，不会产生重复数据
+-- =====================================================================

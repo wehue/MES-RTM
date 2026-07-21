@@ -69,20 +69,51 @@ export const PERMISSION_HOME_PATH = [
   { permission: PERMISSION_CODES.KANBAN, path: '/kanban/line-status' },
 ]
 
+// 归一化后端返回的功能列表，兼容多种分页/包装结构：
+//   [...] / { list: [...] } / { records: [...] } / { rows: [...] } / { data: [...] } / { items: [...] } / { data: { list: [...] } }
 export function normalizeFunctionList(payload) {
   if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.list)) return payload.list
-  if (Array.isArray(payload?.records)) return payload.records
+  if (!payload || typeof payload !== 'object') return []
+  if (Array.isArray(payload.list)) return payload.list
+  if (Array.isArray(payload.records)) return payload.records
+  if (Array.isArray(payload.rows)) return payload.rows
+  if (Array.isArray(payload.items)) return payload.items
+  if (Array.isArray(payload.data)) return payload.data
+  if (payload.data && typeof payload.data === 'object') {
+    if (Array.isArray(payload.data.list)) return payload.data.list
+    if (Array.isArray(payload.data.records)) return payload.data.records
+    if (Array.isArray(payload.data.rows)) return payload.data.rows
+    if (Array.isArray(payload.data.items)) return payload.data.items
+  }
   return []
+}
+
+// 从功能项中提取功能编码，兼容常见字段名：
+//   functionCode / FunctionCode / code / Code / permissionCode / function_code / FUNCTION_CODE
+function extractFunctionCode(item) {
+  if (!item) return null
+  if (typeof item === 'string') return item
+  const raw = item.functionCode
+    || item.FunctionCode
+    || item.code
+    || item.Code
+    || item.permissionCode
+    || item.PermissionCode
+    || item.function_code
+    || item.FUNCTION_CODE
+    || item.funcCode
+    || item.FuncCode
+  return typeof raw === 'string' ? raw.trim() : null
 }
 
 export function functionListToPermissionCodes(functions = []) {
   const codes = new Set()
-  normalizeFunctionList(functions).forEach((item) => {
-    const rawCode = item?.functionCode || item?.FunctionCode || item
-    const functionCode = typeof rawCode === 'string' ? rawCode.trim() : rawCode
-    const normalizedCode = typeof functionCode === 'string' ? functionCode.replace(/-/g, '_').toLowerCase() : functionCode
-    const upperCode = typeof functionCode === 'string' ? functionCode.toUpperCase() : functionCode
+  const list = normalizeFunctionList(functions)
+  list.forEach((item) => {
+    const functionCode = extractFunctionCode(item)
+    if (!functionCode) return
+    const normalizedCode = functionCode.replace(/-/g, '_').toLowerCase()
+    const upperCode = functionCode.toUpperCase()
     const permissions = BACKEND_FUNCTION_PERMISSION_MAP[functionCode]
       || BACKEND_FUNCTION_PERMISSION_MAP[normalizedCode]
       || BACKEND_FUNCTION_PERMISSION_MAP[upperCode]
