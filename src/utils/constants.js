@@ -1,10 +1,13 @@
 export const ROLES = [
-  { value: 'production_supervisor', label: '生产主管' },
-  { value: 'leader', label: '班组长' },
-  { value: 'operator', label: '操作工' },
-  { value: 'quality_engineer', label: '质量工程师' },
-  { value: 'rtm_admin', label: 'RTM管理员' },
+  { value: 'RTM_ADMIN', label: 'RTM管理员' },
+  { value: 'PRODUCTION_SUPERVISOR', label: '生产主管' },
+  { value: 'LEADER', label: '班组长' },
+  { value: 'OPERATOR', label: '操作工' },
+  { value: 'QUALITY_ENGINEER', label: '质量工程师' },
 ]
+
+// 默认注册角色：新用户注册后由前端兜底赋予的操作工角色编码
+export const DEFAULT_REGISTER_ROLE_CODE = 'OPERATOR'
 
 export const PERMISSION_CODES = {
   DASHBOARD: 'dashboard',
@@ -100,7 +103,9 @@ export function firstAccessiblePathByPermissions(permissionCodes = []) {
 }
 
 export function isRtmRole(role) {
-  return ROLES.some((item) => item.value === role)
+  if (!role) return false
+  const upper = String(role).toUpperCase()
+  return ROLES.some((item) => item.value.toUpperCase() === upper)
 }
 
 export const WORK_ORDER_STATUS = {

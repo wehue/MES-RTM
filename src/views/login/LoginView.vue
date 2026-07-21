@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { Lock, OfficeBuilding, Phone, User, UserFilled } from '@element-plus/icons-vue'
 import { loginUser, registerUser } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { ROLES } from '@/utils/constants'
+import { DEFAULT_REGISTER_ROLE_CODE, ROLES } from '@/utils/constants'
 
 const router = useRouter()
 const route = useRoute()
@@ -22,11 +22,12 @@ const registerForm = reactive({
   fullName: '',
   department: 'SMT车间',
   position: '操作工',
+  roleCode: DEFAULT_REGISTER_ROLE_CODE,
   contact: '',
 })
 const loading = ref(false)
 
-const positionOptions = computed(() => ROLES.map((item) => item.label))
+const roleOptions = computed(() => ROLES.filter((item) => item.value !== 'RTM_ADMIN'))
 const panelTitle = computed(() => activeMode.value === 'login' ? '系统登录' : '用户注册')
 const panelDesc = computed(() => activeMode.value === 'login'
   ? '使用系统账号与密码进入生产执行工作台。'
@@ -40,6 +41,13 @@ function compactPayload(payload) {
   return Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
   )
+}
+
+// 兼容后端两种返回结构：扁平 token/userInfo 或嵌套 { token, userInfo }
+function extractLoginResult(result = {}) {
+  const userInfo = result.userInfo || result
+  const token = result.token
+  return { token, userInfo }
 }
 
 async function handleLogin() {
@@ -57,9 +65,16 @@ async function handleLogin() {
       ElMessage.error('登录响应缺少 token，请检查后端接口返回')
       return
     }
-    userStore.setToken(result.token)
-    userStore.setUserInfo(result)
-    await userStore.fetchCurrentFunctions()
+    const { token, userInfo } = extractLoginResult(result)
+    userStore.setToken(token)
+    userStore.setUserInfo(userInfo)
+    try {
+      await userStore.fetchCurrentFunctions()
+    } catch (e) {
+      // 权限接口失败时不应阻断登录流程，但仍提示用户
+      console.error('加载用户功能权限失败：', e)
+      ElMessage.warning('登录已成功，但功能权限加载失败，部分菜单可能不可见')
+    }
     ElMessage.success('登录成功')
     router.push(route.query.redirect || userStore.firstAccessiblePath())
   } finally {
@@ -77,9 +92,22 @@ async function handleRegister() {
     const payload = compactPayload(registerForm)
     const result = await registerUser(payload)
     ElMessage.success(`用户 ${result?.username || payload.username} 注册成功`)
-    loginForm.username = payload.username
-    loginForm.password = payload.password
-    switchMode('login')
+    // 若后端注册接口直接返回 token，则自动登录；否则回填账号并切换到登录
+    if (result?.token) {
+      const { token, userInfo } = extractLoginResult(result)
+      userStore.setToken(token)
+      userStore.setUserInfo(userInfo)
+      try {
+        await userStore.fetchCurrentFunctions()
+      } catch (e) {
+        console.error('加载用户功能权限失败：', e)
+      }
+      router.push(userStore.firstAccessiblePath())
+    } else {
+      loginForm.username = payload.username
+      loginForm.password = payload.password
+      switchMode('login')
+    }
   } finally {
     loading.value = false
   }
@@ -157,8 +185,22 @@ async function handleRegister() {
             <el-input v-model="registerForm.fullName" :prefix-icon="UserFilled" size="large" placeholder="真实姓名" />
           </el-form-item>
           <el-form-item>
-            <el-select v-model="registerForm.position" size="large" class="role-select" placeholder="岗位">
-              <el-option v-for="position in positionOptions" :key="position" :label="position" :value="position" />
+            <el-select
+              v-model="registerForm.roleCode"
+              size="large"
+              class="role-select"
+              placeholder="选择角色"
+              @change="(val) => {
+                const target = ROLES.find((item) => item.value === val)
+                if (target) registerForm.position = target.label
+              }"
+            >
+              <el-option
+                v-for="role in roleOptions"
+                :key="role.value"
+                :label="role.label"
+                :value="role.value"
+              />
             </el-select>
           </el-form-item>
           <el-form-item>

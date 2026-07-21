@@ -134,7 +134,7 @@ const currentBatch = computed(() => {
 
 const mockBatch = computed(() => batches.find(item => item.LotCode === form.LotCode) || null)
 
-const canForce = computed(() => userStore.hasAnyRole(['production_supervisor']))
+const canForce = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
 const isLocked = computed(() => stationOutDetail.value?.lotStatus === BATCH_STATUS_CODE.locked)
 const currentInQty = computed(() => {
   if (stationOutDetail.value?.stationInQuantity) {

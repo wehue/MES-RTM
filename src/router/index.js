@@ -177,10 +177,12 @@ router.beforeEach(async (to) => {
   try {
     const userStore = useUserStore()
     const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
-    const role = userInfo.role || 'rtm_admin'
+    const role = userInfo.role || 'RTM_ADMIN'
     if (!isRtmRole(role)) {
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')
+      localStorage.removeItem('userFunctions')
+      localStorage.removeItem('permissionCodes')
       return { path: '/login', query: { redirect: to.fullPath } }
     }
     await userStore.ensurePermissionsLoaded()

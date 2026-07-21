@@ -3,7 +3,8 @@ import request from '@/utils/request'
 // 用户登录
 // 接口：POST /api/user/login
 // 参数：{ username, password }
-// 返回：{ token, userId, username, fullName, department, position }
+// 返回：{ token, userInfo?: {...}, userId, username, fullName, department, position, role?, roleCode?, roleCodes?: [], roles?: [] }
+//   后端可以直接把用户字段平铺在响应根节点，也可以嵌套到 userInfo 中，前端两种结构都兼容
 export function loginUser(data) {
   return request.post('/user/login', {
     username: data.username,
@@ -13,8 +14,9 @@ export function loginUser(data) {
 
 // 用户注册
 // 接口：POST /api/user/register
-// 参数：{ username, password, fullName, department, position, contact }
-// 返回：{ userId, username, fullName, department, position }
+// 参数：{ username, password, fullName, department, position, roleCode, contact }
+//   roleCode 取值：RTM_ADMIN / PRODUCTION_SUPERVISOR / LEADER / OPERATOR / QUALITY_ENGINEER
+// 返回：{ userId, username, fullName, ... } 或 { token, userInfo, ... }（若后端直接签发 token 则前端自动登录）
 export function registerUser(data) {
   return request.post('/user/register', data)
 }

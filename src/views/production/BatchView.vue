@@ -41,9 +41,9 @@ const listLoading = ref(false)
 const pagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
 const workOrderDetail = ref({})
 
-const canPlanBatch = computed(() => userStore.hasAnyRole(['production_supervisor']))
-const canCoordinateBatch = computed(() => userStore.hasAnyRole(['production_supervisor', 'leader']))
-const canQualityLock = computed(() => userStore.hasAnyRole(['quality_engineer', 'production_supervisor']))
+const canPlanBatch = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
+const canCoordinateBatch = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR', 'LEADER']))
+const canQualityLock = computed(() => userStore.hasAnyRole(['QUALITY_ENGINEER', 'PRODUCTION_SUPERVISOR']))
 const currentUserId = computed(() => findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3)
 const batchStatusCodes = Object.keys(BATCH_STATUS).map(Number)
 

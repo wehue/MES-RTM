@@ -59,7 +59,7 @@ function getOperatorLabel(user) {
 onMounted(() => {
   loadOperatorList()
 })
-const canManageRepair = computed(() => userStore.hasAnyRole(['quality_engineer']))
+const canManageRepair = computed(() => userStore.hasAnyRole(['QUALITY_ENGINEER']))
 
 function getRepairBatch(task) {
   return findBatch(task?.LotId)

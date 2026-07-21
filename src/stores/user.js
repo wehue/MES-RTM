@@ -21,17 +21,17 @@ const DEFAULT_USER = {
   department: '生产部',
   post: '管理层',
   position: '管理层',
-  role: 'rtm_admin',
-  roles: ['rtm_admin'],
+  role: 'RTM_ADMIN',
+  roles: ['RTM_ADMIN'],
   lines: DEFAULT_LINES,
 }
 
-function inferRole(info = {}, fallbackRole = 'operator') {
+function inferRole(info = {}, fallbackRole = 'OPERATOR') {
   // 直接使用后端返回的 role / roleCode，不再做任何映射
-  if (info.role || info.roleCode) return info.role || info.roleCode
-  if (Array.isArray(info.roleCodes) && info.roleCodes.length > 0) {
-    return info.roleCodes[0] || fallbackRole
-  }
+  // 兼容大小写，最终统一为大写形式以便与后端 RoleCode 对齐
+  const raw = info.role || info.roleCode
+    || (Array.isArray(info.roleCodes) && info.roleCodes.length > 0 ? info.roleCodes[0] : null)
+  if (raw) return String(raw).toUpperCase()
   return fallbackRole
 }
 
@@ -41,11 +41,12 @@ function normalizeUserInfo(info = {}, fallback = DEFAULT_USER) {
   const position = info.position || info.post || fallback.position || fallback.post || ''
 
   // 直接使用后端返回的 roleCodes / roles，不再做任何映射
+  // 统一为大写，避免大小写不一致导致权限判定失败
   let roles = [role]
   if (Array.isArray(info.roleCodes) && info.roleCodes.length > 0) {
-    roles = [...info.roleCodes]
+    roles = info.roleCodes.map((item) => String(item).toUpperCase())
   } else if (Array.isArray(info.roles) && info.roles.length > 0) {
-    roles = [...info.roles]
+    roles = info.roles.map((item) => String(item).toUpperCase())
   }
 
   return {
@@ -115,11 +116,15 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function hasRole(role) {
-    return userInfo.value.role === 'rtm_admin' || userInfo.value.roles?.includes(role)
+    const upper = String(role).toUpperCase()
+    return userInfo.value.role?.toUpperCase() === 'RTM_ADMIN'
+      || (userInfo.value.roles || []).some((item) => String(item).toUpperCase() === upper)
   }
 
   function hasAnyRole(roles) {
-    return userInfo.value.role === 'rtm_admin' || roles.some((role) => userInfo.value.roles?.includes(role))
+    if (userInfo.value.role?.toUpperCase() === 'RTM_ADMIN') return true
+    const userRoles = (userInfo.value.roles || []).map((item) => String(item).toUpperCase())
+    return roles.some((role) => userRoles.includes(String(role).toUpperCase()))
   }
 
   function hasPermission(permission) {

@@ -48,7 +48,7 @@ const statusStats = reactive({
   totalCount: 0,
 })
 
-const canManage = computed(() => userStore.hasAnyRole(['production_supervisor']))
+const canManage = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
 const selectedProduct = computed(() => productOptions.value.find((product) => product.Id === Number(form.ProductId)))
 const availableRoutes = computed(() => {
   if (!selectedProduct.value) return []
