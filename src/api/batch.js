@@ -84,7 +84,9 @@ export function createBatch(data) {
 // 接口：POST /api/station-in
 // 用途：进站操作页面提交“执行进站”；后端会自动识别当前工序、写入进站记录，
 //      首道工序进站时会把批次状态改为“生产中”
-// 参数：{ lotId, equipmentId, operatorId, stationInQuantity, remark }
+// 参数：{ lotId, operatorId, stationInQuantity, remark }
+// 说明：工站与设备为一对一关系，进站设备由后端根据当前工站自动识别，
+//      前端无需再传递 equipmentId
 export function createStationIn(data) {
   return request.post('/station-in', data)
 }

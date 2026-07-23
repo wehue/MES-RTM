@@ -133,6 +133,7 @@ function normalizeBatch(batch) {
     FinishedQuantity: batch.finishedQuantity,
     DefectQuantity: batch.defectQuantity,
     CurrentOperationName: batch.currentOperationName,
+    CurrentStationName: batch.currentStationName || batch.stationName || '',
     EstimatedCompletionTime: formatDateTime(batch.estimatedCompletionTime),
     StartTime: formatDateTime(batch.startTime),
     EndTime: formatDateTime(batch.endTime),
@@ -493,6 +494,12 @@ async function operate(row, action) {
         <el-table-column prop="FinishedQuantity" label="已完工数量" width="130" align="center"/>
         <el-table-column prop="DefectQuantity" label="不良数量" width="110" align="center"/>
         <el-table-column prop="CurrentOperationName" label="当前工序" width="150" align="center"/>
+        <el-table-column prop="CurrentStationName" label="当前工站" width="160" align="center">
+          <template #default="{ row }">
+            <span v-if="row.CurrentStationName">{{ row.CurrentStationName }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="EstimatedCompletionTime" label="预计完成时间" width="210" align="center"/>
         <el-table-column prop="StartTime" label="上线时间" width="210" align="center"/>
         <el-table-column label="状态" width="140" align="center">

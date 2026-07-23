@@ -44,6 +44,7 @@ const routeStepRows = computed(() => (detail.value.routeSteps || []).map((item) 
   OperationCode: item.operationCode,
   OperationName: item.operationName,
   EquipmentTypeName: item.equipmentTypeName,
+  StationName: item.stationName || (item.stationCode ? item.stationCode : '-'),
   StandardTimeText: item.standardTime ? `${item.standardTime} 秒` : '-',
 })))
 const lotRows = computed(() => (detail.value.lots || []).map((item) => ({
@@ -157,6 +158,7 @@ onMounted(() => {
           <el-table-column prop="Sequence" label="顺序" width="80" align="center"/>
           <el-table-column prop="OperationCode" label="工序编码" align="center"/>
           <el-table-column prop="OperationName" label="工序名称" align="center"/>
+          <el-table-column prop="StationName" label="工站" align="center"/>
           <el-table-column prop="EquipmentTypeName" label="设备类型" align="center"/>
           <el-table-column prop="StandardTimeText" label="标准工时" align="center"/>
         </el-table>

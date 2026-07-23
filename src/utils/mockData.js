@@ -208,12 +208,22 @@ export const operations = reactive([
   { Id: 5, OperationCode: 'AOI', OperationName: 'AOI 检测', Description: 'AOI 外观检测', ...auditFields() },
 ])
 
+// 工站：产线中的物理工位，与工序、设备均为一对一关系
+// 每条产线包含多个工序，每个工序对应一个物理工站，工站绑定一台设备实例
+export const stations = reactive([
+  { Id: 1, StationCode: 'ST-A1-01', StationName: 'A1 印刷工站', LineId: 1, OperationId: 1, EquipmentId: 1, Description: 'A1 线印刷工位', Status: 1, ...auditFields() },
+  { Id: 2, StationCode: 'ST-A1-02', StationName: 'A1 SPI 工站', LineId: 1, OperationId: 2, EquipmentId: 2, Description: 'A1 线 SPI 检测工位', Status: 1, ...auditFields() },
+  { Id: 3, StationCode: 'ST-A1-03', StationName: 'A1 贴片工站', LineId: 1, OperationId: 3, EquipmentId: 3, Description: 'A1 线贴片工位', Status: 1, ...auditFields() },
+  { Id: 4, StationCode: 'ST-A1-04', StationName: 'A1 回流焊工站', LineId: 1, OperationId: 4, EquipmentId: 4, Description: 'A1 线回流焊接工位', Status: 1, ...auditFields() },
+  { Id: 5, StationCode: 'ST-A1-05', StationName: 'A1 AOI 工站', LineId: 1, OperationId: 5, EquipmentId: 5, Description: 'A1 线 AOI 检测工位', Status: 1, ...auditFields() },
+])
+
 export const routeSteps = reactive([
-  { Id: 101, RouteId: 1, OperationId: 1, Sequence: 10, EquipmentTypeId: 1, ParameterTemplateId: null, StandardTime: 480, ...auditFields() },
-  { Id: 102, RouteId: 1, OperationId: 2, Sequence: 20, EquipmentTypeId: 2, ParameterTemplateId: null, StandardTime: 300, ...auditFields() },
-  { Id: 103, RouteId: 1, OperationId: 3, Sequence: 30, EquipmentTypeId: 3, ParameterTemplateId: null, StandardTime: 1440, ...auditFields() },
-  { Id: 104, RouteId: 1, OperationId: 4, Sequence: 40, EquipmentTypeId: 4, ParameterTemplateId: null, StandardTime: 1080, ...auditFields() },
-  { Id: 105, RouteId: 1, OperationId: 5, Sequence: 50, EquipmentTypeId: 5, ParameterTemplateId: null, StandardTime: 420, ...auditFields() },
+  { Id: 101, RouteId: 1, OperationId: 1, StationId: 1, Sequence: 10, EquipmentTypeId: 1, ParameterTemplateId: null, StandardTime: 480, ...auditFields() },
+  { Id: 102, RouteId: 1, OperationId: 2, StationId: 2, Sequence: 20, EquipmentTypeId: 2, ParameterTemplateId: null, StandardTime: 300, ...auditFields() },
+  { Id: 103, RouteId: 1, OperationId: 3, StationId: 3, Sequence: 30, EquipmentTypeId: 3, ParameterTemplateId: null, StandardTime: 1440, ...auditFields() },
+  { Id: 104, RouteId: 1, OperationId: 4, StationId: 4, Sequence: 40, EquipmentTypeId: 4, ParameterTemplateId: null, StandardTime: 1080, ...auditFields() },
+  { Id: 105, RouteId: 1, OperationId: 5, StationId: 5, Sequence: 50, EquipmentTypeId: 5, ParameterTemplateId: null, StandardTime: 420, ...auditFields() },
 ])
 
 export const boms = reactive([
@@ -467,6 +477,22 @@ export function findRouteStep(routeStepId) {
   return routeSteps.find((item) => item.Id === routeStepId) || null
 }
 
+export function findStation(stationId) {
+  return stations.find((item) => item.Id === stationId) || null
+}
+
+// 按工站 ID 查询绑定的设备信息（工站与设备一对一）
+export function getStationEquipment(stationId) {
+  const station = findStation(stationId)
+  if (!station) return null
+  return equipment.find((item) => item.Id === station.EquipmentId) || null
+}
+
+// 按产线 ID 和工序 ID 查询工站
+export function findStationByLineOperation(lineId, operationId) {
+  return stations.find((item) => item.LineId === lineId && item.OperationId === operationId) || null
+}
+
 export function routeById(routeId) {
   return findRoute(routeId) || routes[0]
 }
@@ -484,11 +510,17 @@ export function getRouteStepRows(routeId) {
     .map((step) => {
       const operation = findOperation(step.OperationId)
       const equipmentType = equipmentTypes.find((item) => item.Id === step.EquipmentTypeId)
+      const station = findStation(step.StationId)
+      const stationEquipment = station ? getStationEquipment(station.Id) : null
       return {
         ...step,
         OperationCode: operation?.OperationCode || '',
         OperationName: operation?.OperationName || '-',
         EquipmentTypeName: equipmentType?.EquipmentTypeName || '-',
+        StationCode: station?.StationCode || '',
+        StationName: station?.StationName || '-',
+        EquipmentCode: stationEquipment?.EquipmentCode || '',
+        EquipmentName: stationEquipment?.EquipmentName || '-',
         StandardTimeText: `${Math.round((step.StandardTime || 0) / 60)} 分钟`,
       }
     })
@@ -571,6 +603,15 @@ export function getCurrentOperationName(batchOrCode) {
   if (!process) return '-'
   const routeStep = findRouteStep(process.RouteStepId)
   return findOperation(routeStep?.OperationId)?.OperationName || '-'
+}
+
+// 按 mock 批次获取当前工序对应的工站（与工序、设备均为一对一关系）
+export function getBatchCurrentStation(batchOrCode) {
+  const process = getCurrentProcess(batchOrCode)
+  if (!process) return null
+  const routeStep = findRouteStep(process.RouteStepId)
+  if (!routeStep?.StationId) return null
+  return findStation(routeStep.StationId)
 }
 
 export function getBatchPendingQty(batchCode) {

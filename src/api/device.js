@@ -1,9 +1,5 @@
 import request from '@/utils/request'
 
-// 查询批次可用设备列表
-// 接口：GET /api/equipment/available-for-lot?lotId={lotId}
-// 参数：lotId - 批次ID（必填）
-// 用途：进站操作中选择设备，根据批次查询可用的设备列表
-export function getAvailableEquipmentForLot(lotId) {
-  return request.get('/equipment/available-for-lot', { params: { lotId } })
-}
+// 设备相关接口集合
+// 说明：自引入"工站"概念后，工站与设备为一对一关系，进站操作不再需要前端
+//      单独查询可用设备列表，设备由后端根据当前工站自动识别。

@@ -9,15 +9,17 @@ import {
   BATCH_STATUS_CODE,
   PROCESS_STATUS_CODE,
   batches,
+  findStation,
+  findStationByLineOperation,
   getBatchLine,
   getBatchPendingQty,
   getBatchWorkOrder,
   getCurrentProcess,
   getRouteStepRows,
+  getStationEquipment,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { getStationInList, getStationInDetail, createStationIn } from '@/api/batch'
-import { getAvailableEquipmentForLot } from '@/api/device'
 import { getOperators } from '@/api/user'
 
 const router = useRouter()
@@ -26,7 +28,6 @@ const userStore = useUserStore()
 
 const form = reactive({
   LotCode: String(route.query.LotCode || route.query.batchId || ''),
-  EquipmentId: '',
   StationInQuantity: 800,
   OperatorId: '',
   VerifyRemark: '',
@@ -38,7 +39,6 @@ const stationInDetail = ref(null)
 const detailLoading = ref(false)
 const submitting = ref(false)
 const listPagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
-const equipmentList = ref([])
 const operatorList = ref([])
 
 async function loadOperatorList() {
@@ -87,20 +87,6 @@ async function loadStationInList() {
   }
 }
 
-async function loadEquipmentList(lotId) {
-  if (!lotId) {
-    equipmentList.value = []
-    return
-  }
-  try {
-    const data = await getAvailableEquipmentForLot(lotId)
-    equipmentList.value = Array.isArray(data) ? data : []
-  } catch (error) {
-    console.error('Failed to load equipment list:', error)
-    equipmentList.value = []
-  }
-}
-
 function handlePageChange(pageNum) {
   listPagination.pageNum = pageNum
 }
@@ -141,13 +127,8 @@ onMounted(() => {
 watch(() => form.LotCode, async (newLotCode) => {
   if (newLotCode) {
     await loadStationInDetail(newLotCode)
-    const batch = stationInList.value.find(item => item.lotCode === newLotCode)
-    if (batch?.id) {
-      await loadEquipmentList(batch.id)
-    }
   } else {
     stationInDetail.value = null
-    equipmentList.value = []
   }
 }, { immediate: true })
 
@@ -191,10 +172,52 @@ const processCompliance = computed(() => {
 })
 const currentLine = computed(() => {
   if (currentBatch.value?.lineName) {
-    return { LineName: currentBatch.value.lineName, LineCode: currentBatch.value.lineName }
+    return { LineName: currentBatch.value.lineName, LineCode: currentBatch.value.lineName, Id: currentBatch.value.lineId }
   }
   return mockBatch.value ? getBatchLine(mockBatch.value) : null
 })
+// 当前工序对应的工站（与工序、设备均为一对一关系）
+// 优先使用后端 station-in/detail 返回的 stationId/stationName；
+// 后端未返回时，按"当前批次产线 + 当前工序"在 mock stations 中查找
+const currentStation = computed(() => {
+  if (!stationInDetail.value) return null
+  const detail = stationInDetail.value
+  // 后端直返字段优先
+  const remoteStationId = detail.stationId || detail.StationId
+  if (remoteStationId) {
+    const station = findStation(remoteStationId)
+    if (station) return station
+  }
+  if (detail.stationName) {
+    return { StationName: detail.stationName, StationCode: detail.stationCode || '', EquipmentId: detail.equipmentId }
+  }
+  // mock 兜底：按产线 + 当前工序查找工站
+  const step = currentRouteSteps.value[currentStepIndex.value]
+  if (step?.StationId) {
+    return findStation(step.StationId)
+  }
+  const lineId = currentLine.value?.Id
+  const operationId = step?.OperationId
+  if (lineId && operationId) {
+    return findStationByLineOperation(lineId, operationId)
+  }
+  return null
+})
+const currentStationEquipment = computed(() => {
+  // 优先使用后端返回的设备信息
+  const detail = stationInDetail.value
+  if (detail?.equipmentCode || detail?.equipmentName) {
+    return {
+      EquipmentCode: detail.equipmentCode || '',
+      EquipmentName: detail.equipmentName || '-',
+      EquipmentTypeName: detail.equipmentTypeName || '',
+    }
+  }
+  // mock 兜底
+  if (!currentStation.value) return null
+  return getStationEquipment(currentStation.value.Id)
+})
+const equipmentBoundReady = computed(() => Boolean(currentStationEquipment.value))
 // BOM 齐套校验（完全依赖后端 /api/lots/station-in/detail 返回的 verifyFailedTotalQuantity：
 //  - 0        → 当前工序 BOM 物料全部校验通过
 //  - >0       → 当前工序仍有 N 个物料未上料/校验失败
@@ -207,7 +230,7 @@ const loadingValidation = computed(() => {
   if (Number(failedQty) <= 0) return { pass: true, type: 'success', message: '当前工序 BOM 物料校验通过，满足进站条件。' }
   return { pass: false, type: 'warning', message: `BOM 物料未齐套，当前工序仍有 ${Number(failedQty)} 个物料校验失败，请先到上料管理补齐物料。` }
 })
-const canSubmit = computed(() => Boolean(currentBatch.value && form.EquipmentId && processCompliance.value.pass && loadingValidation.value.pass))
+const canSubmit = computed(() => Boolean(currentBatch.value && equipmentBoundReady.value && processCompliance.value.pass && loadingValidation.value.pass))
 
 watch(() => form.LotCode, (lotCode) => {
   loadStationInDetail(lotCode)
@@ -219,7 +242,6 @@ watch(() => form.LotCode, (lotCode) => {
   } else {
     form.StationInQuantity = 1
   }
-  form.EquipmentId = ''
 }, { immediate: true })
 
 function selectBatch(batch) {
@@ -233,8 +255,8 @@ async function submit() {
       ElMessage.error(processCompliance.value.message)
       return
     }
-    if (!form.EquipmentId) {
-      ElMessage.error('未选择可用设备，进站提交已拦截')
+    if (!equipmentBoundReady.value) {
+      ElMessage.error('当前工站未绑定设备，请联系管理员维护工站-设备关系')
       return
     }
     if (!loadingValidation.value.pass) {
@@ -251,16 +273,12 @@ async function submit() {
     ElMessage.error('未找到当前批次 ID，无法提交进站')
     return
   }
+  // 工站与设备为一对一关系，设备由后端根据工站自动识别，无需前端传递 equipmentId
   const payload = {
     lotId: Number(lotId),
-    equipmentId: Number(form.EquipmentId),
     operatorId: Number(form.OperatorId),
     stationInQuantity: Number(form.StationInQuantity),
     remark: form.VerifyRemark || undefined,
-  }
-  if (!payload.equipmentId) {
-    ElMessage.error('请选择可用设备')
-    return
   }
   if (!payload.operatorId) {
     ElMessage.error('请选择操作人')
@@ -337,6 +355,13 @@ async function submit() {
               <el-descriptions-item label="计划数量">{{ stationInDetail?.plannedQuantity ?? '-' }}</el-descriptions-item>
               <el-descriptions-item label="待进站数量">{{ stationInDetail?.pendingStationInQuantity ?? '-' }}</el-descriptions-item>
               <el-descriptions-item label="当前工序">{{ stationInDetail?.currentOperation || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="当前工站">
+                <span v-if="currentStation?.StationName" class="station-highlight">
+                  {{ currentStation.StationName }}
+                  <span v-if="currentStation.StationCode" class="station-code">（{{ currentStation.StationCode }}）</span>
+                </span>
+                <span v-else>-</span>
+              </el-descriptions-item>
               <el-descriptions-item label="上一工序">{{ previousStepLabel }}</el-descriptions-item>
               <el-descriptions-item label="批次状态">
                 <StatusTag v-if="stationInDetail?.lotStatus" :meta="statusMeta(BATCH_STATUS, stationInDetail.lotStatus)" />
@@ -354,8 +379,8 @@ async function submit() {
           <el-alert :title="processCompliance.message" :type="processCompliance.type" show-icon :closable="false" />
           <el-alert
             style="margin-top: 10px"
-            :title="form.EquipmentId ? '设备选择完成，可执行进站。' : '未选择设备：请选择当前工序对应的可用设备。'"
-            :type="form.EquipmentId ? 'success' : 'error'"
+            :title="equipmentBoundReady ? `工站已绑定设备：${currentStationEquipment?.EquipmentCode || ''} / ${currentStationEquipment?.EquipmentName || '-'}` : '当前工站未绑定设备，无法进站，请联系管理员维护工站-设备关系。'"
+            :type="equipmentBoundReady ? 'success' : 'error'"
             show-icon
             :closable="false"
           />
@@ -368,15 +393,16 @@ async function submit() {
           />
 
           <el-form :model="form" label-width="106px" class="operation-form">
-            <el-form-item label="设备">
-              <el-select v-model="form.EquipmentId" placeholder="扫描或选择设备" class="full">
-                <el-option
-                  v-for="equipment in equipmentList"
-                  :key="equipment.id"
-                  :label="`${equipment.equipmentCode} / ${equipment.equipmentName} / ${equipment.equipmentTypeName}`"
-                  :value="equipment.id"
-                />
-              </el-select>
+            <el-form-item label="工站">
+              <el-input :model-value="currentStation?.StationName || '-'" readonly>
+                <template v-if="currentStation?.StationCode" #append>{{ currentStation.StationCode }}</template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="绑定设备">
+              <el-input
+                :model-value="currentStationEquipment ? `${currentStationEquipment.EquipmentCode || ''} / ${currentStationEquipment.EquipmentName || '-'}` : '当前工站未绑定设备'"
+                readonly
+              />
             </el-form-item>
             <el-form-item label="进站数量">
               <el-input-number v-model="form.StationInQuantity" :min="1" :max="stationInDetail?.plannedQuantity || 1" />
@@ -392,7 +418,7 @@ async function submit() {
             <el-form-item>
               <div class="table-actions">
                 <el-button size="large" @click="router.push('/execution/loading')">上料管理</el-button>
-                <el-button size="large" @click="Object.assign(form, { EquipmentId: '', StationInQuantity: stationInDetail?.plannedQuantity || 1, VerifyRemark: '' })">信息重置</el-button>
+                <el-button size="large" @click="Object.assign(form, { StationInQuantity: stationInDetail?.plannedQuantity || 1, VerifyRemark: '' })">信息重置</el-button>
                 <el-button type="primary" size="large" class="big-action" :loading="submitting" @click="submit">提交进站</el-button>
               </div>
             </el-form-item>
@@ -437,5 +463,16 @@ async function submit() {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+.station-highlight {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.station-code {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
 }
 </style>

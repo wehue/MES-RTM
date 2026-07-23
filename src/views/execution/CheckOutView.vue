@@ -10,10 +10,13 @@ import {
   DISPOSAL_TYPE_CODE,
   batches,
   batchExecutionState,
+  findStation,
+  getBatchCurrentStation,
   getBatchDefectQuantity,
   getBatchScrapQuantity,
   getCurrentOperationName,
   getInspectionThreshold,
+  getStationEquipment,
   isInspectionProcess,
   getUserDisplayName,
 } from '@/utils/mockData'
@@ -147,6 +150,41 @@ const currentInQty = computed(() => {
   return 0
 })
 const currentOperationName = computed(() => stationOutDetail.value?.currentOperation || (mockBatch.value ? getCurrentOperationName(mockBatch.value) : '-'))
+// 当前工序对应的工站（与工序、设备均为一对一关系）
+// 优先使用后端 station-out/detail 返回的 stationId/stationName；
+// 后端未返回时，按 mock 批次当前工序查找工站
+const currentStation = computed(() => {
+  const detail = stationOutDetail.value
+  if (!detail) return null
+  // 后端直返字段优先
+  const remoteStationId = detail.stationId || detail.StationId
+  if (remoteStationId) {
+    const station = findStation(remoteStationId)
+    if (station) return station
+  }
+  if (detail.stationName) {
+    return { StationName: detail.stationName, StationCode: detail.stationCode || '', EquipmentId: detail.equipmentId }
+  }
+  // mock 兜底
+  if (mockBatch.value) {
+    return getBatchCurrentStation(mockBatch.value)
+  }
+  return null
+})
+const currentStationEquipment = computed(() => {
+  // 优先使用后端返回的设备信息
+  const detail = stationOutDetail.value
+  if (detail?.equipmentCode || detail?.equipmentName) {
+    return {
+      EquipmentCode: detail.equipmentCode || '',
+      EquipmentName: detail.equipmentName || '-',
+      EquipmentTypeName: detail.equipmentTypeName || '',
+    }
+  }
+  // mock 兜底
+  if (!currentStation.value) return null
+  return getStationEquipment(currentStation.value.Id)
+})
 const isInspection = computed(() => currentOperationName.value ? isInspectionProcess(currentOperationName.value) : false)
 const inspectionThreshold = computed(() => currentOperationName.value ? getInspectionThreshold(currentOperationName.value) : 0)
 const inspectionPass = computed(() => form.PassRate >= inspectionThreshold.value)
@@ -343,6 +381,12 @@ async function submit() {
           <el-table-column prop="lotCode" label="批次号" min-width="160" align="center"/>
           <el-table-column prop="workOrderCode" label="工单号" min-width="160" align="center"/>
           <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
+          <el-table-column label="当前工站" min-width="160" align="center">
+            <template #default="{ row }">
+              <span v-if="row.stationName || row.currentStationName">{{ row.stationName || row.currentStationName }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="currentOperation" label="当前工序" min-width="160" align="center"/>
           <el-table-column prop="stationInQuantity" label="进站数量" width="180" align="center"/>
           <el-table-column label="状态" width="120" align="center">
@@ -379,6 +423,19 @@ async function submit() {
           <el-descriptions-item label="批次号">{{ currentBatch.lotCode }}</el-descriptions-item>
           <el-descriptions-item label="产品名称">{{ stationOutDetail?.productName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前工序">{{ currentOperationName }}</el-descriptions-item>
+          <el-descriptions-item label="当前工站">
+            <span v-if="currentStation?.StationName" class="station-highlight">
+              {{ currentStation.StationName }}
+              <span v-if="currentStation.StationCode" class="station-code">（{{ currentStation.StationCode }}）</span>
+            </span>
+            <span v-else>-</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="绑定设备">
+            <span v-if="currentStationEquipment">
+              {{ currentStationEquipment.EquipmentCode || '' }} / {{ currentStationEquipment.EquipmentName || '-' }}
+            </span>
+            <span v-else>-</span>
+          </el-descriptions-item>
           <el-descriptions-item label="进站数量">{{ currentInQty }}</el-descriptions-item>
           <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
           <el-descriptions-item label="批次状态">
@@ -489,5 +546,16 @@ async function submit() {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
+}
+
+.station-highlight {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.station-code {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
 }
 </style>
