@@ -37,7 +37,8 @@ export function getWorkOrderDetail(id) {
 
 // 新建工单
 // 接口：POST /api/work-orders
-// 用途：工单管理页面新增工单，参数包含 workOrderCode、productId、routeId、plannedQuantity 等
+// 用途：工单管理页面新增工单，参数包含 productId、routeId、plannedQuantity、dueDate、status
+// createdBy/updatedBy 由后端从登录态自动填充，前端无需传递
 export function createWorkOrder(data) {
   return request.post('/work-orders', data)
 }

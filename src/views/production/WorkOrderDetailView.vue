@@ -56,6 +56,7 @@ const lotRows = computed(() => (detail.value.lots || []).map((item) => ({
   CompletedQuantity: item.completedQuantity,
   LineName: item.lineName,
   CurrentOperation: item.currentOperation,
+  CurrentStation: item.currentStation || item.stationName || item.currentStationName || '-',
   StartTime: formatDateTime(item.startTime),
   EstimatedCompletionTime: formatDateTime(item.estimatedCompletionTime),
 })))
@@ -158,7 +159,7 @@ onMounted(() => {
           <el-table-column prop="Sequence" label="顺序" width="80" align="center"/>
           <el-table-column prop="OperationCode" label="工序编码" align="center"/>
           <el-table-column prop="OperationName" label="工序名称" align="center"/>
-          <el-table-column prop="StationName" label="工站" align="center"/>
+          <el-table-column prop="StationName" label="工站名称" align="center"/>
           <el-table-column prop="EquipmentTypeName" label="设备类型" align="center"/>
           <el-table-column prop="StandardTimeText" label="标准工时" align="center"/>
         </el-table>
@@ -177,6 +178,12 @@ onMounted(() => {
           <el-table-column prop="PlannedQuantity" label="计划数量" width="110" align="center"/>
           <el-table-column prop="CompletedQuantity" label="完工数量" width="110" align="center"/>
           <el-table-column prop="CurrentOperation" label="当前工序" align="center"/>
+          <el-table-column prop="CurrentStation" label="当前工站" align="center">
+            <template #default="{ row }">
+              <span v-if="row.CurrentStation">{{ row.CurrentStation }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="LineName" label="产线" align="center"/>
           <el-table-column prop="StartTime" label="上线时间" align="center"/>
           <el-table-column prop="EstimatedCompletionTime" label="预计下线" align="center"/>

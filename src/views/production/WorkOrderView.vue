@@ -29,6 +29,7 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const listLoading = ref(false)
 const optionLoading = ref(false)
+const exportLoading = ref(false)
 const operatingOrderId = ref(null)
 const operatingAction = ref('')
 const filters = reactive({ workOrderCode: '', productId: '', status: '' })
@@ -289,6 +290,75 @@ function handleSizeChange(pageSize) {
   pagination.pageNum = 1
   loadWorkOrders()
 }
+
+// 导出工单 Excel（CSV 格式，Excel 可直接打开，无需额外依赖）
+async function handleExport() {
+  if (exportLoading.value) return
+  exportLoading.value = true
+  try {
+    // 获取全部符合筛选条件的工单（不分页）
+    const result = await getWorkOrderList({
+      workOrderCode: filters.workOrderCode || undefined,
+      productId: filters.productId || undefined,
+      status: filters.status || undefined,
+      pageNum: 1,
+      pageSize: 10000,
+    })
+    const allRows = (result.list || []).map(normalizeWorkOrder)
+    if (!allRows.length) {
+      ElMessage.warning('当前筛选条件下无数据可导出')
+      return
+    }
+
+    // 表头（中文列名，与列表展示一致）
+    const headers = [
+      '工单号', '产品名称', '产品类型', '计划数量', '交货期', '工艺路线', '状态', '创建人', '创建时间', '更新人', '更新时间'
+    ]
+    // 字段顺序与表头对应
+    const fields = [
+      'WorkOrderCode', 'ProductName', 'ProductTypeName', 'PlannedQuantity', 'DueDate', 'RouteName',
+      (row) => WORK_ORDER_STATUS[row.Status]?.label || '-',
+      'CreatedBy', 'CreatedAt', 'UpdatedBy', 'UpdatedAt',
+    ]
+
+    // 构造 CSV 内容（BOM 以支持中文，使用逗号分隔，双引号包裹防逗号截断）
+    // 时间字段前加 \t 前缀，强制 Excel/WPS 按纯文本处理，避免自动识别为日期后因列宽不足显示 #####
+    const escapeCell = (val, isTime = false) => {
+      if (val === null || val === undefined) return '""'
+      const str = String(val).replace(/"/g, '""')
+      return isTime ? `"\t${str}"` : `"${str}"`
+    }
+    const timeFields = new Set(['DueDate', 'CreatedAt', 'UpdatedAt'])
+    const headerLine = headers.map((h) => `"${h}"`).join(',')
+    const dataLines = allRows.map((row) =>
+      fields.map((field) => {
+        const key = typeof field === 'function' ? '' : field
+        const value = typeof field === 'function' ? field(row) : row[field]
+        return escapeCell(value ?? '-', timeFields.has(key))
+      }).join(',')
+    )
+    const csvContent = '\uFEFF' + [headerLine, ...dataLines].join('\r\n')
+
+    // 触发下载
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const timestamp = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.download = `工单导出_${timestamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    ElMessage.success(`已导出 ${allRows.length} 条工单数据`)
+  } catch (error) {
+    console.error('导出工单失败:', error)
+    ElMessage.error('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -298,7 +368,7 @@ function handleSizeChange(pageSize) {
         <h1 class="page-title">工单管理</h1>
       </div>
       <div class="table-actions">
-        <el-button @click="ElMessage.success('已导出当前筛选工单数据')">导出 Excel</el-button>
+        <el-button :loading="exportLoading" @click="handleExport">导出 Excel</el-button>
         <el-button type="primary" :disabled="!canManage" @click="openCreateDialog">新建工单</el-button>
       </div>
     </div>
