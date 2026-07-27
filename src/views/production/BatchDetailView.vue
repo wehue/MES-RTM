@@ -85,7 +85,7 @@ onMounted(() => {
         <el-descriptions-item label="计划数量">{{ batchDetail.baseInfo.plannedQuantity }}</el-descriptions-item>
         <el-descriptions-item label="良品数量">{{ batchDetail.baseInfo.goodQuantity }}</el-descriptions-item>
         <el-descriptions-item label="当前工序">{{ batchDetail.baseInfo.currentOperationName || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="当前工站">{{ batchDetail.baseInfo.currentStationName || batchDetail.baseInfo.stationName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="当前工站">{{ batchDetail.baseInfo.currentStationName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ formatTime(batchDetail.baseInfo.createdAt) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <StatusTag :meta="statusMeta(BATCH_STATUS, batchDetail.baseInfo.status)" />
@@ -102,9 +102,10 @@ onMounted(() => {
         >
           <strong>{{ getEventTypeText(item.eventType) }}</strong>
           <span v-if="item.operationName"> - {{ item.operationName }}</span>
-          <span v-if="item.stationName"> - {{ item.stationName }}</span>
+          <span v-if="item.sequence"> - 工序{{ item.sequence }}</span>
           <p class="muted" v-if="item.quantity">数量: {{ item.quantity }}</p>
           <p class="muted" v-if="item.defectQuantity">不良: {{ item.defectQuantity }}</p>
+          <p class="muted" v-if="item.passRate !== undefined">通过率: {{ item.passRate }}%</p>
         </el-timeline-item>
       </el-timeline>
     </SectionCard>

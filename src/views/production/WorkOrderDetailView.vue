@@ -217,14 +217,12 @@ onMounted(() => {
   justify-self: stretch;
 }
 
-.base-descriptions {
-  :deep(.el-descriptions__label) {
-    width: 240px !important;
-    min-width: 240px !important;
-    white-space: nowrap !important;
-    word-break: keep-all;
-    font-size: 13px;
-  }
+.base-descriptions :deep(.el-descriptions__label) {
+  width: 240px !important;
+  min-width: 240px !important;
+  white-space: nowrap !important;
+  word-break: keep-all;
+  font-size: 13px;
 }
 
 @media (max-width: 720px) {

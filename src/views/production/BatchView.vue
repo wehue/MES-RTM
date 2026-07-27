@@ -469,7 +469,7 @@ async function operate(row, action) {
         </el-form-item>
         <el-form-item label="产线">
           <el-select v-model="filters.LineCode" clearable placeholder="全部产线" style="width: 130px">
-            <el-option v-for="line in lineList" :key="line.id" :label="line.lineName" :value="line.id" />
+            <el-option v-for="line in lineList" :key="line.id" :label="line.lineName" :value="line.lineName" />
           </el-select>
         </el-form-item>
         <el-form-item>
