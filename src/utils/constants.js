@@ -15,6 +15,7 @@ export const PERMISSION_CODES = {
   WORK_ORDER: 'work_order',
   BATCH: 'batch',
   LOADING: 'loading',
+  UNLOADING: 'unloading',
   CHECK_IN: 'check_in',
   CHECK_OUT: 'check_out',
   TRACKING: 'tracking',
@@ -29,6 +30,7 @@ export const BACKEND_FUNCTION_PERMISSION_MAP = {
   work_order: [PERMISSION_CODES.WORK_ORDER],
   batch: [PERMISSION_CODES.BATCH],
   loading: [PERMISSION_CODES.LOADING],
+  unloading: [PERMISSION_CODES.UNLOADING],
   check_in: [PERMISSION_CODES.CHECK_IN],
   check_out: [PERMISSION_CODES.CHECK_OUT],
   tracking: [PERMISSION_CODES.TRACKING],
@@ -44,6 +46,7 @@ export const BACKEND_FUNCTION_PERMISSION_MAP = {
   SCHEDULE_BOARD: [PERMISSION_CODES.DASHBOARD, PERMISSION_CODES.KANBAN],
   INBOUND_MANAGE: [PERMISSION_CODES.CHECK_IN],
   LOADING_TASK_VIEW: [PERMISSION_CODES.LOADING],
+  UNLOADING_TASK_VIEW: [PERMISSION_CODES.UNLOADING],
   INBOUND_LOADING_CHECK: [PERMISSION_CODES.CHECK_IN, PERMISSION_CODES.LOADING],
   OUTBOUND_MANAGE: [PERMISSION_CODES.CHECK_OUT],
   REPAIR_MANAGE: [PERMISSION_CODES.REPAIR],
@@ -61,6 +64,7 @@ export const PERMISSION_HOME_PATH = [
   { permission: PERMISSION_CODES.WORK_ORDER, path: '/production/work-order' },
   { permission: PERMISSION_CODES.BATCH, path: '/production/batch' },
   { permission: PERMISSION_CODES.LOADING, path: '/execution/loading' },
+  { permission: PERMISSION_CODES.UNLOADING, path: '/execution/unloading' },
   { permission: PERMISSION_CODES.CHECK_IN, path: '/execution/check-in' },
   { permission: PERMISSION_CODES.CHECK_OUT, path: '/execution/check-out' },
   { permission: PERMISSION_CODES.REPAIR, path: '/execution/repair' },
@@ -121,11 +125,22 @@ export function functionListToPermissionCodes(functions = []) {
     permissions.forEach((permission) => codes.add(permission))
   })
   codes.add(PERMISSION_CODES.SYSTEM)
+
+  // 兜底规则（设计文档 9.2 节）：拥有 loading 权限的角色默认拥有 unloading 权限
+  // 用于后端 smt_functions 表尚未新增 unloading 功能项时的过渡兼容
+  if (codes.has(PERMISSION_CODES.LOADING) && !codes.has(PERMISSION_CODES.UNLOADING)) {
+    codes.add(PERMISSION_CODES.UNLOADING)
+  }
+
   return [...codes]
 }
 
 export function hasBackendPermission(permissionCodes = [], permission) {
   if (!permission || permission === PERMISSION_CODES.SYSTEM) return true
+  // 兜底规则：拥有 loading 权限自动拥有 unloading 权限（设计文档 9.2 节）
+  if (permission === PERMISSION_CODES.UNLOADING && permissionCodes.includes(PERMISSION_CODES.LOADING)) {
+    return true
+  }
   return permissionCodes.includes(permission)
 }
 

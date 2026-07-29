@@ -75,8 +75,9 @@ const allMenuItems = [
     icon: Position,
     title: '生产执行',
     children: [
-      { index: '/execution/check-in', title: '进站操作', permission: PERMISSION_CODES.CHECK_IN },
       { index: '/execution/loading', title: '上料管理', permission: PERMISSION_CODES.LOADING },
+      { index: '/execution/unloading', title: '下料管理', permission: PERMISSION_CODES.UNLOADING },
+      { index: '/execution/check-in', title: '进站操作', permission: PERMISSION_CODES.CHECK_IN },
       { index: '/execution/check-out', title: '出站操作', permission: PERMISSION_CODES.CHECK_OUT },
       { index: '/execution/repair', title: '维修管理', permission: PERMISSION_CODES.REPAIR },
     ],

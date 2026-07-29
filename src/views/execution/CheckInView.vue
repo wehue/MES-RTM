@@ -14,6 +14,8 @@ import {
   getBatchLine,
   getBatchPendingQty,
   getBatchWorkOrder,
+  getBatchCurrentStation,
+  getCurrentOperationName,
   getCurrentProcess,
   getRouteStepRows,
   getStationEquipment,
@@ -80,8 +82,28 @@ async function loadStationInList() {
     }
   } catch (error) {
     console.error('Failed to load station-in list:', error)
-    stationInList.value = []
-    listPagination.total = 0
+    // Mock 兜底：从 batches 构造待进站列表
+    stationInList.value = batches
+      .filter((b) => [BATCH_STATUS_CODE.running, BATCH_STATUS_CODE.paused].includes(b.Status))
+      .map((b) => {
+        const wo = getBatchWorkOrder(b)
+        const line = getBatchLine(b)
+        const station = getBatchCurrentStation(b)
+        return {
+          lotCode: b.LotCode,
+          workOrderCode: wo?.WorkOrderCode || '-',
+          productName: wo?.ProductName || '-',
+          lineName: line?.LineName || '-',
+          currentStationName: station?.StationName || '-',
+          currentOperation: getCurrentOperationName(b),
+          pendingStationInQuantity: getBatchPendingQty(b.LotCode) || b.PlannedQuantity - b.CompletedQuantity,
+          isNormal: true,
+        }
+      })
+    listPagination.total = stationInList.value.length
+    if (!form.LotCode && stationInList.value.length) {
+      form.LotCode = stationInList.value[0].lotCode
+    }
   } finally {
     listLoading.value = false
   }
@@ -326,8 +348,14 @@ async function submit() {
           <el-table-column prop="lotCode" label="批次号" min-width="160" align="center"/>
           <el-table-column prop="workOrderCode" label="工单号" min-width="160" align="center"/>
           <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
-          <el-table-column prop="lineName" label="产线" width="180" align="center" />
-          <el-table-column prop="pendingStationInQuantity" label="待进站数量" width="180" align="center" />
+          <el-table-column label="当前工站" min-width="160" align="center">
+            <template #default="{ row }">
+              <span v-if="row.currentStationName || row.stationName">{{ row.currentStationName || row.stationName }}</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="currentOperation" label="当前工序" min-width="120" align="center"/>
+          <el-table-column prop="pendingStationInQuantity" label="待进站数量" width="130" align="center"/>
         </el-table>
         <div class="table-pagination">
           <el-pagination

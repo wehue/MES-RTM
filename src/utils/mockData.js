@@ -120,9 +120,10 @@ export const functions = reactive([
   { Id: 2, FunctionCode: 'work_order', FunctionName: '工单管理', Subsystem: 'MES-RTM', Description: '工单创建与释放', ...auditFields() },
   { Id: 3, FunctionCode: 'batch', FunctionName: '批次管理', Subsystem: 'MES-RTM', Description: '批次拆分与投产', ...auditFields() },
   { Id: 4, FunctionCode: 'loading', FunctionName: '上料管理', Subsystem: 'MES-RTM', Description: 'BOM 齐套校验和上料记录', ...auditFields() },
-  { Id: 5, FunctionCode: 'check_in', FunctionName: '进站操作', Subsystem: 'MES-RTM', Description: '批次进站', ...auditFields() },
-  { Id: 6, FunctionCode: 'check_out', FunctionName: '出站操作', Subsystem: 'MES-RTM', Description: '批次出站', ...auditFields() },
-  { Id: 7, FunctionCode: 'repair', FunctionName: '维修管理', Subsystem: 'MES-RTM', Description: '维修处理', ...auditFields() },
+  { Id: 5, FunctionCode: 'unloading', FunctionName: '下料管理', Subsystem: 'MES-RTM', Description: '工站已上料物料的下料纠正', ...auditFields() },
+  { Id: 6, FunctionCode: 'check_in', FunctionName: '进站操作', Subsystem: 'MES-RTM', Description: '批次进站', ...auditFields() },
+  { Id: 7, FunctionCode: 'check_out', FunctionName: '出站操作', Subsystem: 'MES-RTM', Description: '批次出站', ...auditFields() },
+  { Id: 8, FunctionCode: 'repair', FunctionName: '维修管理', Subsystem: 'MES-RTM', Description: '维修处理', ...auditFields() },
 ])
 
 export const equipmentTypes = reactive([
@@ -131,6 +132,26 @@ export const equipmentTypes = reactive([
   { Id: 3, EquipmentTypeCode: 'MNT', EquipmentTypeName: '贴片机', Description: '贴装', ...auditFields() },
   { Id: 4, EquipmentTypeCode: 'RFL', EquipmentTypeName: '回流炉', Description: '回流焊接', ...auditFields() },
   { Id: 5, EquipmentTypeCode: 'AOI', EquipmentTypeName: 'AOI 检测仪', Description: '外观检测', ...auditFields() },
+])
+
+// 封装类型字典（对应 smt_package_types）
+export const packageTypes = reactive([
+  { Id: 1, PackageCode: '0402', PackageName: '0402', Category: 'Chip', SizeLength: 1.0, SizeWidth: 0.5, SizeHeight: 0.3, ...auditFields() },
+  { Id: 2, PackageCode: '0603', PackageName: '0603', Category: 'Chip', SizeLength: 1.6, SizeWidth: 0.8, SizeHeight: 0.4, ...auditFields() },
+  { Id: 3, PackageCode: '0805', PackageName: '0805', Category: 'Chip', SizeLength: 2.0, SizeWidth: 1.25, SizeHeight: 0.5, ...auditFields() },
+  { Id: 4, PackageCode: 'QFN32', PackageName: 'QFN32', Category: 'IC', SizeLength: 5.0, SizeWidth: 5.0, SizeHeight: 0.9, ...auditFields() },
+  { Id: 5, PackageCode: 'BGA256', PackageName: 'BGA256', Category: 'IC', SizeLength: 17.0, SizeWidth: 17.0, SizeHeight: 1.2, ...auditFields() },
+])
+
+// 设备类型支持的封装类型（对应 smt_equipment_package_types）
+// 贴片机支持所有贴片封装；其他设备类型不需要上 BOM 物料
+export const equipmentPackageTypes = reactive([
+  // 贴片机（Id=3）支持所有封装
+  { Id: 1, EquipmentTypeId: 3, PackageTypeId: 1, ...auditFields() }, // 0402
+  { Id: 2, EquipmentTypeId: 3, PackageTypeId: 2, ...auditFields() }, // 0603
+  { Id: 3, EquipmentTypeId: 3, PackageTypeId: 3, ...auditFields() }, // 0805
+  { Id: 4, EquipmentTypeId: 3, PackageTypeId: 4, ...auditFields() }, // QFN32
+  { Id: 5, EquipmentTypeId: 3, PackageTypeId: 5, ...auditFields() }, // BGA256
 ])
 
 export const lines = reactive([
@@ -219,11 +240,11 @@ export const stations = reactive([
 ])
 
 export const routeSteps = reactive([
-  { Id: 101, RouteId: 1, OperationId: 1, StationId: 1, Sequence: 10, EquipmentTypeId: 1, ParameterTemplateId: null, StandardTime: 480, ...auditFields() },
-  { Id: 102, RouteId: 1, OperationId: 2, StationId: 2, Sequence: 20, EquipmentTypeId: 2, ParameterTemplateId: null, StandardTime: 300, ...auditFields() },
-  { Id: 103, RouteId: 1, OperationId: 3, StationId: 3, Sequence: 30, EquipmentTypeId: 3, ParameterTemplateId: null, StandardTime: 1440, ...auditFields() },
-  { Id: 104, RouteId: 1, OperationId: 4, StationId: 4, Sequence: 40, EquipmentTypeId: 4, ParameterTemplateId: null, StandardTime: 1080, ...auditFields() },
-  { Id: 105, RouteId: 1, OperationId: 5, StationId: 5, Sequence: 50, EquipmentTypeId: 5, ParameterTemplateId: null, StandardTime: 420, ...auditFields() },
+  { Id: 101, RouteId: 1, OperationId: 1, StationId: 1, Sequence: 1, EquipmentTypeId: 1, ParameterTemplateId: null, StandardTime: 480, ...auditFields() },
+  { Id: 102, RouteId: 1, OperationId: 2, StationId: 2, Sequence: 2, EquipmentTypeId: 2, ParameterTemplateId: null, StandardTime: 300, ...auditFields() },
+  { Id: 103, RouteId: 1, OperationId: 3, StationId: 3, Sequence: 3, EquipmentTypeId: 3, ParameterTemplateId: null, StandardTime: 1440, ...auditFields() },
+  { Id: 104, RouteId: 1, OperationId: 4, StationId: 4, Sequence: 4, EquipmentTypeId: 4, ParameterTemplateId: null, StandardTime: 1080, ...auditFields() },
+  { Id: 105, RouteId: 1, OperationId: 5, StationId: 5, Sequence: 5, EquipmentTypeId: 5, ParameterTemplateId: null, StandardTime: 420, ...auditFields() },
 ])
 
 export const boms = reactive([
@@ -255,6 +276,91 @@ export const materials = reactive([
 
 export const materialSubstitutes = reactive([
   { Id: 1, MaterialId: 2, SubstituteMaterialId: 3, Direction: 1, Priority: 1, ...auditFields() },
+])
+
+// 物料批次表（对应 smt_material_lots）
+// 一个物料批次只能属于一个物料，同一物料可以有多个批次
+export const materialLots = reactive([
+  {
+    Id: 1,
+    MaterialCode: 'R0603-10K',
+    BatchNo: 'LOT20260520-01',
+    Supplier: 'Yageo',
+    SupplierBatchNo: 'YG-2026-0501',
+    Quantity: 3000,
+    UsedQuantity: 1200,
+    ProductionDate: '2026-04-15',
+    ExpiryDate: '2027-04-15',
+    MslLevel: 1,
+    InboundDate: '2026-05-20 09:00',
+    Status: '在库',
+    Barcode: 'R0603-10K#LOT20260520-01',
+    ...auditFields('2026-05-20 09:00', '物料入库'),
+  },
+  {
+    Id: 2,
+    MaterialCode: 'R0603-10K',
+    BatchNo: 'LOT20260610-02',
+    Supplier: 'Vishay',
+    SupplierBatchNo: 'VS-2026-0602',
+    Quantity: 2000,
+    UsedQuantity: 0,
+    ProductionDate: '2026-06-01',
+    ExpiryDate: '2027-06-01',
+    MslLevel: 1,
+    InboundDate: '2026-06-10 10:30',
+    Status: '在库',
+    Barcode: 'R0603-10K#LOT20260610-02',
+    ...auditFields('2026-06-10 10:30', '物料入库'),
+  },
+  {
+    Id: 3,
+    MaterialCode: 'C0402-10uF',
+    BatchNo: 'LOT20260520-01',
+    Supplier: 'Murata',
+    SupplierBatchNo: 'MR-2026-0501',
+    Quantity: 2000,
+    UsedQuantity: 500,
+    ProductionDate: '2026-04-20',
+    ExpiryDate: '2027-04-20',
+    MslLevel: 1,
+    InboundDate: '2026-05-20 09:15',
+    Status: '在库',
+    Barcode: 'C0402-10uF#LOT20260520-01',
+    ...auditFields('2026-05-20 09:15', '物料入库'),
+  },
+  {
+    Id: 4,
+    MaterialCode: 'U-QFN32-MCU',
+    BatchNo: 'LOT20260520-01',
+    Supplier: 'ST',
+    SupplierBatchNo: 'ST-2026-0501',
+    Quantity: 600,
+    UsedQuantity: 100,
+    ProductionDate: '2026-03-10',
+    ExpiryDate: '2026-09-10',
+    MslLevel: 3,
+    InboundDate: '2026-05-20 09:30',
+    Status: '在库',
+    Barcode: 'U-QFN32-MCU#LOT20260520-01',
+    ...auditFields('2026-05-20 09:30', '物料入库'),
+  },
+  {
+    Id: 5,
+    MaterialCode: 'LED0603-G',
+    BatchNo: 'LOT20260520-01',
+    Supplier: 'Everlight',
+    SupplierBatchNo: 'EL-2026-0501',
+    Quantity: 1200,
+    UsedQuantity: 0,
+    ProductionDate: '2026-05-01',
+    ExpiryDate: '2027-05-01',
+    MslLevel: 1,
+    InboundDate: '2026-05-20 09:45',
+    Status: '已冻结',
+    Barcode: 'LED0603-G#LOT20260520-01',
+    ...auditFields('2026-05-20 09:45', '物料入库'),
+  },
 ])
 
 export const bomItems = reactive([
@@ -365,13 +471,13 @@ export const stationInRecords = reactive([
 export const stationOutRecords = reactive([])
 
 export const loadingRecords = reactive([
-  { Id: 1, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, OperatorId: 3, LoadingTime: '2026-05-20 14:00', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:00', '上料通过') },
-  { Id: 2, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, OperatorId: 3, LoadingTime: '2026-05-20 14:05', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:05', '部分上料') },
-  { Id: 3, LotId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, OperatorId: 3, LoadingTime: '2026-05-20 14:08', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:08', '上料通过') },
-  { Id: 4, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, OperatorId: 3, LoadingTime: '2026-05-20 08:30', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:30', '上料通过') },
-  { Id: 5, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, OperatorId: 3, LoadingTime: '2026-05-20 08:32', ActualQuantity: 2000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:32', '上料通过') },
-  { Id: 6, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, OperatorId: 3, LoadingTime: '2026-05-20 08:35', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:35', '上料通过') },
-  { Id: 7, LotId: 2, RouteStepId: 101, EquipmentId: 1, MaterialId: 5, OperatorId: 3, LoadingTime: '2026-05-20 08:38', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:38', '上料通过') },
+  { Id: 1, LotId: 1, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, MaterialLotId: 1, OperatorId: 3, LoadingTime: '2026-05-20 14:00', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:00', '上料通过') },
+  { Id: 2, LotId: 1, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, MaterialLotId: 3, OperatorId: 3, LoadingTime: '2026-05-20 14:05', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:05', '部分上料') },
+  { Id: 3, LotId: 1, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, MaterialLotId: 4, OperatorId: 3, LoadingTime: '2026-05-20 14:08', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 14:08', '上料通过') },
+  { Id: 4, LotId: 2, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 1, MaterialLotId: 1, OperatorId: 3, LoadingTime: '2026-05-20 08:30', ActualQuantity: 3000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:30', '上料通过') },
+  { Id: 5, LotId: 2, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 2, MaterialLotId: 3, OperatorId: 3, LoadingTime: '2026-05-20 08:32', ActualQuantity: 2000, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:32', '上料通过') },
+  { Id: 6, LotId: 2, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 4, MaterialLotId: 4, OperatorId: 3, LoadingTime: '2026-05-20 08:35', ActualQuantity: 600, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:35', '上料通过') },
+  { Id: 7, LotId: 2, StationId: 1, RouteStepId: 101, EquipmentId: 1, MaterialId: 5, MaterialLotId: 5, OperatorId: 3, LoadingTime: '2026-05-20 08:38', ActualQuantity: 1200, VerifyStatus: 1, VerifyRemark: '', ...auditFields('2026-05-20 08:38', '上料通过') },
 ])
 
 export const unloadingRecords = reactive([])
@@ -449,6 +555,10 @@ export function findLine(lineId) {
 
 export function findEquipment(equipmentId) {
   return equipment.find((item) => item.Id === equipmentId || item.EquipmentCode === equipmentId) || null
+}
+
+export function findEquipmentType(equipmentTypeId) {
+  return equipmentTypes.find((item) => item.Id === equipmentTypeId) || null
 }
 
 export function findUser(userId) {
@@ -786,6 +896,46 @@ export function fillBatchMaterial(lotCode, payload) {
   loadingRecords.unshift(nextRecord)
   if (validateBatchLoading(lotCode).pass) clearBatchLoadingRequest(lotCode)
   return { ok: true, task: getBatchLoadingTasks(lotCode).find((item) => item.BomItemId === target.BomItemId), record: nextRecord }
+}
+
+// 基于工站的上料记录（不关联批次）
+// 用于"上料管理"流程简化后的场景：直接选择工站 → 扫码上料
+// 参数：{ routeStepId, stationId, equipmentId, barcode, loadingQuantity, operatorId }
+export function addStationLoadingRecord(payload) {
+  const routeStepId = payload.routeStepId
+  const stationId = payload.stationId
+  const equipmentId = payload.equipmentId
+  const barcode = String(payload.barcode || '').trim()
+  const actualQuantity = Math.max(Number(payload.loadingQuantity) || 0, 0)
+
+  if (!routeStepId || !stationId) return { ok: false, message: '工站信息缺失。' }
+  if (!barcode) return { ok: false, message: '物料批次条码不能为空。' }
+  if (actualQuantity <= 0) return { ok: false, message: '上料数量必须大于 0。' }
+
+  const materialLot = materialLots.find((lot) => lot.Barcode === barcode)
+  if (!materialLot) return { ok: false, message: '物料批次不存在。' }
+
+  const material = materials.find((m) => m.MaterialCode === materialLot.MaterialCode)
+  const operator = findUser(payload.operatorId) || users[2]
+  const nextRecord = {
+    Id: Date.now(),
+    LotId: null,
+    StationId: stationId,
+    RouteStepId: routeStepId,
+    EquipmentId: equipmentId,
+    MaterialId: material?.Id || null,
+    MaterialLotId: materialLot.Id,
+    OperatorId: operator.Id,
+    LoadingTime: payload.loadingTime || nowText(),
+    ActualQuantity: actualQuantity,
+    VerifyStatus: VERIFY_STATUS_CODE.passed,
+    VerifyRemark: '',
+    ...auditFields(payload.loadingTime || nowText(), '扫码上料（工站直选）'),
+  }
+  loadingRecords.unshift(nextRecord)
+  // 扣减库存
+  consumeMaterialLot(barcode, actualQuantity)
+  return { ok: true, record: nextRecord }
 }
 
 export function getBatchLoadingSummary(lotCode) {
@@ -1281,4 +1431,460 @@ export function getBatchTrace(lotCode) {
       OperatorName: operator?.FullName || '',
     }
   })
+}
+
+// ==================== 物料批次管理辅助函数 ====================
+
+// 按 ID/条码/批次号查找物料批次
+export function findMaterialLot(idOrBarcode) {
+  if (!idOrBarcode) return null
+  const key = String(idOrBarcode).trim()
+  return materialLots.find(
+    (item) => String(item.Id) === key || item.Barcode === key || item.BatchNo === key,
+  ) || null
+}
+
+// 按物料编码查找所有批次
+export function findMaterialLotsByMaterialCode(materialCode) {
+  if (!materialCode) return []
+  return materialLots.filter((item) => item.MaterialCode === materialCode)
+}
+
+// 带筛选的物料批次列表查询
+export function getMaterialLotList(filters = {}) {
+  let list = [...materialLots]
+  if (filters.MaterialCode) {
+    list = list.filter((item) => item.MaterialCode === filters.MaterialCode)
+  }
+  if (filters.Status) {
+    list = list.filter((item) => item.Status === filters.Status)
+  }
+  if (filters.Supplier) {
+    const kw = String(filters.Supplier).toLowerCase()
+    list = list.filter((item) => String(item.Supplier || '').toLowerCase().includes(kw))
+  }
+  if (filters.BatchNo) {
+    const kw = String(filters.BatchNo).toLowerCase()
+    list = list.filter((item) => String(item.BatchNo || '').toLowerCase().includes(kw) || String(item.Barcode || '').toLowerCase().includes(kw))
+  }
+  // 有效期范围筛选
+  if (filters.ExpiryDateStart) {
+    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) >= filters.ExpiryDateStart)
+  }
+  if (filters.ExpiryDateEnd) {
+    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) <= filters.ExpiryDateEnd)
+  }
+  // 入库日期范围筛选
+  if (filters.InboundDateStart) {
+    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) >= filters.InboundDateStart)
+  }
+  if (filters.InboundDateEnd) {
+    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) <= filters.InboundDateEnd)
+  }
+  // 过期状态筛选
+  if (filters.ExpiryStatus === 'expired') {
+    const today = new Date().toISOString().slice(0, 10)
+    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) < today)
+  } else if (filters.ExpiryStatus === 'valid') {
+    const today = new Date().toISOString().slice(0, 10)
+    list = list.filter((item) => !item.ExpiryDate || String(item.ExpiryDate) >= today)
+  }
+  // 默认按入库日期倒序
+  list.sort((a, b) => String(b.InboundDate).localeCompare(String(a.InboundDate)))
+  return list
+}
+
+// 本地创建物料批次（BatchNo 和 Barcode 由后端生成，Mock 模式下本地生成）
+export function createMaterialLot(payload) {
+  const material = materials.find((item) => item.MaterialCode === payload.MaterialCode)
+  if (!material) return { ok: false, message: '物料编码不存在' }
+  const quantity = Number(payload.Quantity) || 0
+  if (quantity <= 0) return { ok: false, message: '入库数量必须大于 0' }
+
+  const newId = materialLots.length ? Math.max(...materialLots.map((item) => item.Id)) + 1 : 1
+  // Mock 模式下本地生成 BatchNo 和 Barcode（真实环境由后端返回）
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const seq = String(materialLots.filter((item) => item.MaterialCode === payload.MaterialCode).length + 1).padStart(2, '0')
+  const batchNo = `LOT${dateStr}-${seq}`
+  const barcode = `${payload.MaterialCode}#${batchNo}`
+
+  const newLot = {
+    Id: newId,
+    MaterialCode: payload.MaterialCode,
+    BatchNo: batchNo,
+    Supplier: payload.Supplier || '',
+    SupplierBatchNo: payload.SupplierBatchNo || '',
+    Quantity: quantity,
+    UsedQuantity: 0,
+    ProductionDate: payload.ProductionDate || null,
+    ExpiryDate: payload.ExpiryDate || null,
+    MslLevel: payload.MslLevel || null,
+    InboundDate: payload.InboundDate || nowText(),
+    Status: '在库',
+    Barcode: barcode,
+    ...auditFields(nowText(), '物料入库'),
+  }
+  materialLots.unshift(newLot)
+  return { ok: true, lot: newLot }
+}
+
+// 修改物料批次状态
+export function updateMaterialLotStatus(id, status) {
+  const lot = materialLots.find((item) => item.Id === id)
+  if (!lot) return { ok: false, message: '物料批次不存在' }
+  if (lot.Status === '已使用') return { ok: false, message: '已使用状态不可变更' }
+  lot.Status = status
+  lot.UpdatedAt = nowText()
+  lot.LastOperationType = 'UPDATE'
+  lot.LastOperationRemark = `状态变更为${status}`
+  return { ok: true, lot }
+}
+
+// 扣减物料批次库存
+export function consumeMaterialLot(barcode, quantity) {
+  const lot = findMaterialLot(barcode)
+  if (!lot) return { ok: false, message: '条码无效，物料批次不存在' }
+  const consumeQty = Number(quantity) || 0
+  const remaining = lot.Quantity - lot.UsedQuantity
+  if (consumeQty <= 0) return { ok: false, message: '扣减数量必须大于 0' }
+  if (consumeQty > remaining) return { ok: false, message: `物料批次剩余 ${remaining}，不足需要的 ${consumeQty}` }
+  lot.UsedQuantity += consumeQty
+  if (lot.UsedQuantity >= lot.Quantity) {
+    lot.Status = '已使用'
+  }
+  lot.UpdatedAt = nowText()
+  lot.LastOperationType = 'UPDATE'
+  lot.LastOperationRemark = `上料消耗 ${consumeQty}`
+  return { ok: true, lot }
+}
+
+// 获取指定工站（RouteStepId）的已上料物料批次记录
+// 字段对齐 smt_loading_records 表结构：LotId, StationId, MaterialLotId, OperatorId, LoadingTime, VerifyStatus, VerifyRemark
+export function getStationLoadingRecords(routeStepId, lotId = null) {
+  let records = loadingRecords.filter((item) => item.RouteStepId === routeStepId)
+  if (lotId) {
+    records = records.filter((item) => item.LotId === lotId)
+  }
+  return records.map((rec) => {
+    // 通过 MaterialLotId 关联物料批次
+    const materialLot = materialLots.find((ml) => ml.Id === rec.MaterialLotId)
+    const material = materialLot
+      ? materials.find((m) => m.MaterialCode === materialLot.MaterialCode)
+      : materials.find((m) => m.Id === rec.MaterialId)
+    const operator = findUser(rec.OperatorId)
+    const station = findStation(rec.StationId)
+    // 校验状态文案
+    const verifyStatusText = { 0: '未校验', 1: '校验通过', 2: '校验失败' }[rec.VerifyStatus] || '未校验'
+    const verifyStatusTag = { 0: 'info', 1: 'success', 2: 'danger' }[rec.VerifyStatus] || 'info'
+    return {
+      Id: rec.Id,
+      LotId: rec.LotId,
+      StationId: rec.StationId,
+      MaterialLotId: rec.MaterialLotId,
+      OperatorId: rec.OperatorId,
+      LoadingTime: rec.LoadingTime || rec.CreatedAt || '-',
+      VerifyStatus: rec.VerifyStatus,
+      VerifyStatusText: verifyStatusText,
+      VerifyStatusTag: verifyStatusTag,
+      VerifyRemark: rec.VerifyRemark || '',
+      // 关联展示字段
+      MaterialCode: material?.MaterialCode || '-',
+      MaterialDesc: material?.MaterialDesc || '-',
+      PackageType: material?.PackageType || '-',
+      Barcode: materialLot?.Barcode || '-',
+      BatchNo: materialLot?.BatchNo || '-',
+      Supplier: materialLot?.Supplier || '-',
+      SupplierBatchNo: materialLot?.SupplierBatchNo || '-',
+      ExpiryDate: materialLot?.ExpiryDate || '-',
+      MaterialLotStatus: materialLot?.Status || '-',
+      ActualQuantity: rec.ActualQuantity || 0,
+      OperatorName: operator?.FullName || '-',
+      StationCode: station?.StationCode || '-',
+      StationName: station?.StationName || '-',
+    }
+  })
+}
+
+// ==================== 下料管理 Mock 函数 ====================
+
+// 下料原因枚举（与数据库 smt_unloading_records.Reason tinyint 对齐）
+// 1-批次完工换线 / 2-物料耗尽 / 3-品质异常 / 4-其他
+// 注：用户需求中的"上错料"和"进站校验失败"两种场景归并到 4-其他，通过 Remark 备注说明
+export const UNLOAD_REASON = {
+  BATCH_CHANGE: { code: 1, label: '批次完工换线' },
+  MATERIAL_DEPLETED: { code: 2, label: '物料耗尽' },
+  QUALITY_ISSUE: { code: 3, label: '品质异常' },
+  OTHER: { code: 4, label: '其他' },
+}
+
+// 下料原因 code → label 映射（便于历史记录展示）
+export const UNLOAD_REASON_TEXT = {
+  1: '批次完工换线',
+  2: '物料耗尽',
+  3: '品质异常',
+  4: '其他',
+}
+
+// 下料场景细分（用于"其他"原因下的备注快速选择，仅为前端便捷录入，不入库）
+export const UNLOAD_OTHER_SCENE = {
+  WRONG_MATERIAL: '上错料',
+  CHECK_IN_FAILED: '进站校验失败',
+}
+
+// 计算指定上料记录的可下料数量（上料数量 - 已下料数量）
+export function getUnloadableQuantity(loadingRecordId) {
+  const loaded = loadingRecords.find((r) => r.Id === loadingRecordId)
+  if (!loaded) return 0
+  const unloaded = unloadingRecords
+    .filter((r) => r.LoadingRecordId === loadingRecordId)
+    .reduce((sum, r) => sum + (r.UnloadQuantity || 0), 0)
+  return Math.max((loaded.ActualQuantity || 0) - unloaded, 0)
+}
+
+// 获取工站可下料的上料记录（可下料数量 > 0）
+export function getStationUnloadableRecords(routeStepId) {
+  const records = getStationLoadingRecords(routeStepId, null)
+  return records
+    .map((rec) => ({
+      ...rec,
+      UnloadableQuantity: getUnloadableQuantity(rec.Id),
+    }))
+    .filter((rec) => rec.UnloadableQuantity > 0)
+}
+
+// 创建下料记录，同时回退物料批次库存
+// 字段对齐数据库 smt_unloading_records：
+//   payload: { loadingRecordId, unloadQuantity, reasonCode, remark, operatorId }
+//   reasonCode: 1-批次完工换线 / 2-物料耗尽 / 3-品质异常 / 4-其他
+//   remark: 下料备注（"其他"原因时必填，建议说明上错料/进站校验失败等具体场景）
+export function addUnloadingRecord(payload) {
+  const loadingRecordId = payload.loadingRecordId
+  const unloadQuantity = Math.max(Number(payload.unloadQuantity) || 0, 0)
+
+  if (!loadingRecordId) return { ok: false, message: '缺少关联的上料记录 ID。' }
+  const loadingRecord = loadingRecords.find((r) => r.Id === loadingRecordId)
+  if (!loadingRecord) return { ok: false, message: '关联的上料记录不存在。' }
+  if (unloadQuantity <= 0) return { ok: false, message: '下料数量必须大于 0。' }
+
+  const unloadable = getUnloadableQuantity(loadingRecordId)
+  if (unloadQuantity > unloadable) {
+    return { ok: false, message: `下料数量超过可下料数量（${unloadable}）。` }
+  }
+
+  // 下料原因校验：必须是 1-4 的有效 code
+  const reasonCode = Number(payload.reasonCode)
+  if (![1, 2, 3, 4].includes(reasonCode)) {
+    return { ok: false, message: '请选择有效的下料原因。' }
+  }
+  // "4-其他"原因必须填写备注（用于说明上错料/进站校验失败等具体场景）
+  if (reasonCode === 4 && !String(payload.remark || '').trim()) {
+    return { ok: false, message: '选择"其他"原因时必须填写备注（说明上错料/进站校验失败等）。' }
+  }
+
+  const operator = findUser(payload.operatorId) || users[2]
+  const materialLot = materialLots.find((ml) => ml.Id === loadingRecord.MaterialLotId)
+
+  // 数据库实际字段（对齐 smt_unloading_records 表结构）
+  const nextRecord = {
+    Id: Date.now(),
+    LoadingRecordId: loadingRecordId,
+    LotId: loadingRecord.LotId || null,
+    RouteStepId: loadingRecord.RouteStepId,
+    EquipmentId: loadingRecord.EquipmentId || null,
+    MaterialId: loadingRecord.MaterialId || null,
+    // 数据库无 MaterialLotId 字段，但通过 LoadingRecordId 可间接关联，此处保留用于前端展示
+    MaterialLotId: loadingRecord.MaterialLotId,
+    UnloadingTime: nowText(),
+    OperatorId: operator.Id,
+    Reason: reasonCode,
+    UnloadQuantity: unloadQuantity,
+    InitialQuantity: loadingRecord.ActualQuantity || 0,
+    ActualUsedQuantity: (loadingRecord.ActualQuantity || 0) - unloadable,
+    RemainQuantity: unloadable - unloadQuantity,
+    WastageQuantity: 0,
+    Remark: payload.remark || '',
+    ...auditFields(nowText(), '下料操作'),
+  }
+  unloadingRecords.unshift(nextRecord)
+
+  // 回退物料批次库存
+  if (materialLot) {
+    materialLot.UsedQuantity = Math.max((materialLot.UsedQuantity || 0) - unloadQuantity, 0)
+    materialLot.UpdatedAt = nowText()
+    materialLot.LastOperationType = 'UNLOAD'
+    materialLot.LastOperationRemark = `下料回退 ${unloadQuantity}`
+  }
+
+  return {
+    ok: true,
+    record: nextRecord,
+    materialLotRemainingQuantity: materialLot
+      ? (materialLot.Quantity || 0) - materialLot.UsedQuantity
+      : null,
+  }
+}
+
+// 查询工站下料记录列表
+export function getStationUnloadingRecords(routeStepId) {
+  return unloadingRecords
+    .filter((r) => r.RouteStepId === routeStepId)
+    .map((rec) => {
+      const materialLot = materialLots.find((ml) => ml.Id === rec.MaterialLotId)
+      const material = materialLot
+        ? materials.find((m) => m.MaterialCode === materialLot.MaterialCode)
+        : materials.find((m) => m.Id === rec.MaterialId)
+      const operator = findUser(rec.OperatorId)
+      const routeStep = routeSteps.find((rs) => rs.Id === rec.RouteStepId)
+      const station = routeStep ? findStation(routeStep.StationId) : null
+      return {
+        Id: rec.Id,
+        LoadingRecordId: rec.LoadingRecordId,
+        RouteStepId: rec.RouteStepId,
+        EquipmentId: rec.EquipmentId,
+        MaterialId: rec.MaterialId,
+        MaterialLotId: rec.MaterialLotId,
+        OperatorId: rec.OperatorId,
+        // 对齐数据库字段名
+        UnloadingTime: rec.UnloadingTime || rec.CreatedAt || '-',
+        UnloadQuantity: rec.UnloadQuantity || 0,
+        Reason: rec.Reason,
+        ReasonText: UNLOAD_REASON_TEXT[rec.Reason] || '-',
+        Remark: rec.Remark || '',
+        InitialQuantity: rec.InitialQuantity || 0,
+        ActualUsedQuantity: rec.ActualUsedQuantity || 0,
+        RemainQuantity: rec.RemainQuantity || 0,
+        WastageQuantity: rec.WastageQuantity || 0,
+        // 前端展示用关联字段
+        MaterialCode: material?.MaterialCode || '-',
+        MaterialDesc: material?.MaterialDesc || '-',
+        PackageType: material?.PackageType || '-',
+        Barcode: materialLot?.Barcode || '-',
+        BatchNo: materialLot?.BatchNo || '-',
+        Supplier: materialLot?.Supplier || '-',
+        SupplierBatchNo: materialLot?.SupplierBatchNo || '-',
+        ExpiryDate: materialLot?.ExpiryDate || '-',
+        OperatorName: operator?.FullName || '-',
+        StationCode: station?.StationCode || '-',
+        StationName: station?.StationName || '-',
+      }
+    })
+}
+
+// 合并查询工站上下料历史（按时间倒序）
+export function getStationLoadingAndUnloadingHistory(routeStepId) {
+  const loading = getStationLoadingRecords(routeStepId, null).map((rec) => ({
+    ...rec,
+    RecordType: 'loading',
+    RecordTypeText: '上料',
+    RecordTypeTag: 'success',
+    Quantity: rec.ActualQuantity || 0,
+    QuantityLabel: `+${rec.ActualQuantity || 0}`,
+    OperationTime: rec.LoadingTime,
+    RelatedRecordId: null,
+    Reason: '',
+    ReasonText: '',
+    Remark: '',
+  }))
+  const unloading = getStationUnloadingRecords(routeStepId).map((rec) => ({
+    ...rec,
+    RecordType: 'unloading',
+    RecordTypeText: '下料',
+    RecordTypeTag: 'warning',
+    Quantity: rec.UnloadQuantity || 0,
+    QuantityLabel: `-${rec.UnloadQuantity || 0}`,
+    OperationTime: rec.UnloadingTime,
+    RelatedRecordId: rec.LoadingRecordId,
+    Reason: rec.ReasonText,
+    Remark: rec.Remark,
+  }))
+  return [...loading, ...unloading]
+    .sort((a, b) => String(b.OperationTime || '').localeCompare(String(a.OperationTime || '')))
+}
+
+// 获取设备类型支持的封装类型列表（PackageCode 数组）
+export function getEquipmentSupportedPackages(equipmentTypeId) {
+  const supported = equipmentPackageTypes.filter((item) => item.EquipmentTypeId === equipmentTypeId)
+  return supported.map((item) => {
+    const pkg = packageTypes.find((p) => p.Id === item.PackageTypeId)
+    return pkg?.PackageCode || null
+  }).filter(Boolean)
+}
+
+// 上料前完整校验（封装类型 + 物料状态 + 有效期 + 库存）
+// equipmentTypeId: 当前工站设备类型 ID（用于封装类型校验）
+export function validateMaterialLotForLoading(barcode, equipmentTypeId, requiredQty = 0) {
+  // 1. 查找物料批次
+  const lot = findMaterialLot(barcode)
+  if (!lot) {
+    return { ok: false, code: 'NOT_FOUND', message: '条码无效，请先在「物料批次管理」中创建物料批次' }
+  }
+
+  // 获取物料信息
+  const material = materials.find((item) => item.MaterialCode === lot.MaterialCode)
+  const materialPackageType = material?.PackageType || ''
+
+  // 2. 封装类型校验
+  if (equipmentTypeId) {
+    const supportedPackages = getEquipmentSupportedPackages(equipmentTypeId)
+    if (supportedPackages.length && !supportedPackages.includes(materialPackageType)) {
+      return {
+        ok: false,
+        code: 'PACKAGE_MISMATCH',
+        message: `封装类型不匹配：物料 ${lot.MaterialCode} 的封装 ${materialPackageType} 不被当前工站设备类型支持`,
+        lot,
+        supportedPackages,
+        materialPackageType,
+      }
+    }
+  }
+
+  // 3. 物料状态校验
+  if (lot.Status !== '在库') {
+    return {
+      ok: false,
+      code: 'STATUS_INVALID',
+      message: `物料批次状态为「${lot.Status}」，无法上料`,
+      lot,
+    }
+  }
+
+  // 4. 有效期校验
+  if (lot.ExpiryDate) {
+    const today = new Date()
+    const expiry = new Date(lot.ExpiryDate)
+    if (expiry < today) {
+      return {
+        ok: false,
+        code: 'EXPIRED',
+        message: `物料批次已过期（${lot.ExpiryDate}），无法上料`,
+        lot,
+      }
+    }
+  }
+
+  // 5. 库存校验
+  const remaining = lot.Quantity - lot.UsedQuantity
+  if (requiredQty > 0 && remaining < requiredQty) {
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_QTY',
+      message: `物料批次剩余 ${remaining}，不足需要的 ${requiredQty}`,
+      lot,
+    }
+  }
+
+  // 全部通过
+  return {
+    ok: true,
+    code: 'PASS',
+    message: '物料批次校验通过',
+    lot,
+    material,
+    checks: {
+      packageCheck: { pass: true, supportedPackages: equipmentTypeId ? getEquipmentSupportedPackages(equipmentTypeId) : [], materialPackageType },
+      statusCheck: { pass: true, status: lot.Status },
+      expiryCheck: { pass: true, expiryDate: lot.ExpiryDate },
+      quantityCheck: { pass: true, remaining, requiredQty },
+    },
+  }
 }

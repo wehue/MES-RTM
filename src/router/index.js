@@ -68,19 +68,25 @@ const routes = [
       },
       {
         path: 'execution',
-        redirect: '/execution/check-in',
+        redirect: '/execution/loading',
         children: [
-          {
-            path: 'check-in',
-            name: 'CheckIn',
-            component: () => import('@/views/execution/CheckInView.vue'),
-            meta: { title: '进站操作', module: '生产执行', permission: PERMISSION_CODES.CHECK_IN },
-          },
           {
             path: 'loading',
             name: 'Loading',
             component: () => import('@/views/execution/LoadingView.vue'),
             meta: { title: '上料管理', module: '生产执行', permission: PERMISSION_CODES.LOADING },
+          },
+          {
+            path: 'unloading',
+            name: 'Unloading',
+            component: () => import('@/views/execution/UnloadingView.vue'),
+            meta: { title: '下料管理', module: '生产执行', permission: PERMISSION_CODES.UNLOADING },
+          },
+          {
+            path: 'check-in',
+            name: 'CheckIn',
+            component: () => import('@/views/execution/CheckInView.vue'),
+            meta: { title: '进站操作', module: '生产执行', permission: PERMISSION_CODES.CHECK_IN },
           },
           {
             path: 'check-out',
