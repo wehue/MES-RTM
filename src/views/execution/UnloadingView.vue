@@ -363,7 +363,6 @@ onMounted(async () => {
     <div class="page-header">
       <div>
         <h1 class="page-title">下料管理</h1>
-        <p class="page-subtitle">对工站已上料物料进行下料纠正，支持上错料纠正与进站校验失败纠正</p>
       </div>
       <div class="table-actions">
         <el-button type="primary" plain @click="router.push('/execution/loading')">

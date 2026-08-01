@@ -554,7 +554,6 @@ onMounted(async () => {
     <div class="page-header">
       <div>
         <h1 class="page-title">上料管理</h1>
-        <p class="page-subtitle">物料批次管理与上料操作，直接选择工站进行扫码上料</p>
       </div>
       <div class="table-actions">
         <el-button type="primary" plain @click="router.push('/execution/check-in')">

@@ -110,7 +110,6 @@ function submitRepair() {
     <div class="page-header">
       <div>
         <h1 class="page-title">维修管理</h1>
-        <p class="page-subtitle">维修任务按 smt_repair_records 字段展示和提交，批次、产品、产线通过关联查询获得。</p>
       </div>
     </div>
 

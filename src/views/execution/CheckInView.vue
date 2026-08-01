@@ -329,7 +329,6 @@ async function submit() {
     <div class="page-header">
       <div>
         <h1 class="page-title">进站操作</h1>
-        <p class="page-subtitle">按 smt_station_in_records 字段提交进站，校验当前工序、物料齐套和设备绑定。</p>
       </div>
     </div>
 

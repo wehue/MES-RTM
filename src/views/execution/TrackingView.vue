@@ -23,7 +23,6 @@ const traces = computed(() => getBatchTrace(form.LotCode))
     <div class="page-header">
       <div>
         <h1 class="page-title">批次追溯</h1>
-        <p class="page-subtitle">查看批次从进站、出站、维修到流转下一工序的全过程记录。</p>
       </div>
       <el-button @click="ElMessage.success('批次追溯报告已导出')">导出追溯报告</el-button>
     </div>

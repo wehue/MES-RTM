@@ -49,7 +49,6 @@ function handleReset() {
     <div class="page-header">
       <div>
         <h1 class="page-title">设备状态监控</h1>
-        <p class="page-subtitle">设备基础字段来自 smt_equipment，当前批次、OEE、产量等为运行状态统计数据。</p>
       </div>
       <el-segmented v-model="viewMode" :options="[{ label: '列表视图', value: 'table' }, { label: '矩阵视图', value: 'matrix' }]" />
     </div>

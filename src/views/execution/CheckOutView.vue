@@ -362,7 +362,6 @@ async function submit() {
     <div class="page-header">
       <div>
         <h1 class="page-title">出站操作</h1>
-        <p class="page-subtitle">按 smt_station_out_records 字段提交出站，普通工序确认数量，SPI / AOI 按通过率和阈值处理。</p>
       </div>
     </div>
 

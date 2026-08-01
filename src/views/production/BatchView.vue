@@ -38,6 +38,7 @@ const statusStats = ref({
 const lineList = ref([])
 const batchRows = ref([])
 const listLoading = ref(false)
+const exportLoading = ref(false)
 const pagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
 const workOrderDetail = ref({})
 
@@ -435,6 +436,80 @@ async function operate(row, action) {
     ElMessage.error(`${action}失败: ${error.message}`)
   }
 }
+
+// 导出批次 Excel（CSV 格式，Excel 可直接打开，无需额外依赖）
+async function handleExport() {
+  if (exportLoading.value) return
+  exportLoading.value = true
+  try {
+    // 获取全部符合筛选条件的批次（不分页）
+    const result = await getBatchList({
+      lotCode: filters.keyword || undefined,
+      workOrderCode: filters.WorkOrderCode || undefined,
+      productName: filters.ProductName || undefined,
+      status: filters.Status || undefined,
+      lineName: filters.LineCode || undefined,
+      pageNum: 1,
+      pageSize: 10000,
+    })
+    const allRows = (result.list || []).map(normalizeBatch)
+    if (!allRows.length) {
+      ElMessage.warning('当前筛选条件下无数据可导出')
+      return
+    }
+
+    // 表头（中文列名，与列表展示一致）
+    const headers = [
+      '批次号', '所属工单', '产品名称', '产品类型', '分配产线', '计划数量', '已完工数量', '不良数量',
+      '当前工序', '当前工站', '预计完成时间', '上线时间', '状态'
+    ]
+    // 字段顺序与表头对应
+    const fields = [
+      'LotCode', 'WorkOrderCode', 'ProductName', 'ProductTypeName', 'LineName',
+      'PlannedQuantity', 'FinishedQuantity', 'DefectQuantity',
+      'CurrentOperationName', 'CurrentStationName',
+      'EstimatedCompletionTime', 'StartTime',
+      (row) => BATCH_STATUS[row.Status]?.label || '-',
+    ]
+
+    // 构造 CSV 内容（BOM 以支持中文，使用逗号分隔，双引号包裹防逗号截断）
+    // 时间字段前加 \t 前缀，强制 Excel/WPS 按纯文本处理，避免自动识别为日期后因列宽不足显示 #####
+    const escapeCell = (val, isTime = false) => {
+      if (val === null || val === undefined || val === '-') return '""'
+      const str = String(val).replace(/"/g, '""')
+      return isTime ? `"\t${str}"` : `"${str}"`
+    }
+    const timeFields = new Set(['EstimatedCompletionTime', 'StartTime'])
+    const headerLine = headers.map((h) => `"${h}"`).join(',')
+    const dataLines = allRows.map((row) =>
+      fields.map((field) => {
+        const key = typeof field === 'function' ? '' : field
+        const value = typeof field === 'function' ? field(row) : row[field]
+        return escapeCell(value ?? '-', timeFields.has(key))
+      }).join(',')
+    )
+    const csvContent = '\uFEFF' + [headerLine, ...dataLines].join('\r\n')
+
+    // 触发下载
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const timestamp = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.download = `批次导出_${timestamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    ElMessage.success(`已导出 ${allRows.length} 条批次数据`)
+  } catch (error) {
+    console.error('导出批次失败:', error)
+    ElMessage.error('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -442,12 +517,10 @@ async function operate(row, action) {
     <div class="page-header">
       <div>
         <h1 class="page-title">批次管理</h1>
-        <p class="page-subtitle">批次主数据按 smt_lots 字段维护，产品、工单、产线和当前工序均通过关联查询展示。</p>
       </div>
       <div class="table-actions">
+        <el-button :loading="exportLoading" @click="handleExport">导出 Excel</el-button>
         <el-button type="primary" :disabled="!canPlanBatch" @click="openCreateDialog">新建批次</el-button>
-        <el-button :disabled="!canCoordinateBatch" @click="ElMessage.success('同产线批次已批量暂停')">批量暂停</el-button>
-        <el-button :disabled="!canCoordinateBatch" @click="ElMessage.success('同产线批次已批量恢复')">批量恢复</el-button>
       </div>
     </div>
 
