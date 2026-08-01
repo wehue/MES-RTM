@@ -70,10 +70,6 @@ async function handleLogin() {
 
         <div class="factory-grid">
           <div>
-            <strong>4</strong>
-            <span>产线在线</span>
-          </div>
-          <div>
             <strong>30s</strong>
             <span>数据刷新</span>
           </div>
@@ -225,7 +221,7 @@ async function handleLogin() {
 
 .factory-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 

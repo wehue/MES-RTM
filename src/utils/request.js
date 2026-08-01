@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
@@ -67,19 +67,31 @@ request.interceptors.response.use(
   }
 )
 
-// token 过期统一处理：弹窗提示 → 清除登录态 → 跳转登录页
+// token 过期统一处理：模态弹窗阻塞操作 → 清除登录态 → 跳转登录页
 function handleTokenExpired(message) {
   if (isRedirecting) return
   isRedirecting = true
-  ElMessage.error(message || '登录已过期，请重新登录')
+  // 清除本地登录态
   localStorage.removeItem('token')
   localStorage.removeItem('userInfo')
   localStorage.removeItem('userFunctions')
   localStorage.removeItem('permissionCodes')
-  // 延迟跳转，让用户看到提示
-  setTimeout(() => {
+  // 使用模态弹窗强制阻塞用户操作，确认后跳转登录页
+  ElMessageBox.alert(
+    message || '登录状态已过期，请重新登录',
+    '登录失效',
+    {
+      confirmButtonText: '重新登录',
+      type: 'warning',
+      showClose: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+    }
+  ).finally(() => {
+    isRedirecting = false
+    // 使用 location.href 确保完全重置页面状态（Pinia store、路由等）
     window.location.href = '/login'
-  }, 800)
+  })
 }
 
 export default request
