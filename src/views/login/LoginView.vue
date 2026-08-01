@@ -1,47 +1,20 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Lock, OfficeBuilding, Phone, User, UserFilled } from '@element-plus/icons-vue'
-import { loginUser, registerUser } from '@/api/user'
+import { Lock, User } from '@element-plus/icons-vue'
+import { loginUser } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { DEFAULT_REGISTER_ROLE_CODE, ROLES } from '@/utils/constants'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const activeMode = ref('login')
 const loginForm = reactive({
   username: 'admin',
   password: '123456',
 })
-const registerForm = reactive({
-  username: '',
-  password: '',
-  fullName: '',
-  department: 'SMT车间',
-  position: '操作工',
-  roleCode: DEFAULT_REGISTER_ROLE_CODE,
-  contact: '',
-})
 const loading = ref(false)
-
-const roleOptions = computed(() => ROLES.filter((item) => item.value !== 'RTM_ADMIN'))
-const panelTitle = computed(() => activeMode.value === 'login' ? '系统登录' : '用户注册')
-const panelDesc = computed(() => activeMode.value === 'login'
-  ? '使用系统账号与密码进入生产执行工作台。'
-  : '创建新的 MES-RTM 系统用户账号。')
-
-function switchMode(mode) {
-  activeMode.value = mode
-}
-
-function compactPayload(payload) {
-  return Object.fromEntries(
-    Object.entries(payload).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
-  )
-}
 
 // 兼容后端两种返回结构：扁平 token/userInfo 或嵌套 { token, userInfo }
 function extractLoginResult(result = {}) {
@@ -77,37 +50,6 @@ async function handleLogin() {
     }
     ElMessage.success('登录成功')
     router.push(route.query.redirect || userStore.firstAccessiblePath())
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleRegister() {
-  if (!registerForm.username.trim() || !registerForm.password) {
-    ElMessage.warning('注册账号和密码为必填项')
-    return
-  }
-  loading.value = true
-  try {
-    const payload = compactPayload(registerForm)
-    const result = await registerUser(payload)
-    ElMessage.success(`用户 ${result?.username || payload.username} 注册成功`)
-    // 若后端注册接口直接返回 token，则自动登录；否则回填账号并切换到登录
-    if (result?.token) {
-      const { token, userInfo } = extractLoginResult(result)
-      userStore.setToken(token)
-      userStore.setUserInfo(userInfo)
-      try {
-        await userStore.fetchCurrentFunctions()
-      } catch (e) {
-        console.error('加载用户功能权限失败：', e)
-      }
-      router.push(userStore.firstAccessiblePath())
-    } else {
-      loginForm.username = payload.username
-      loginForm.password = payload.password
-      switchMode('login')
-    }
   } finally {
     loading.value = false
   }
@@ -148,21 +90,17 @@ async function handleRegister() {
       </div>
 
       <div class="login-panel">
+        <div class="panel-decoration" />
+
         <div class="panel-title">
-          <h2>{{ panelTitle }}</h2>
-          <p>{{ panelDesc }}</p>
+          <div class="title-icon">
+            <el-icon :size="28"><User /></el-icon>
+          </div>
+          <h2>欢迎登录</h2>
+          <p>使用系统账号与密码进入生产执行工作台</p>
         </div>
 
-        <div class="mode-switch" role="tablist" aria-label="登录注册切换">
-          <button type="button" :class="{ active: activeMode === 'login' }" @click="switchMode('login')">
-            登录
-          </button>
-          <button type="button" :class="{ active: activeMode === 'register' }" @click="switchMode('register')">
-            注册
-          </button>
-        </div>
-
-        <el-form v-if="activeMode === 'login'" :model="loginForm" class="login-form" @submit.prevent="handleLogin">
+        <el-form :model="loginForm" class="login-form" @submit.prevent="handleLogin">
           <el-form-item>
             <el-input v-model="loginForm.username" :prefix-icon="User" size="large" placeholder="请输入用户名" />
           </el-form-item>
@@ -170,49 +108,12 @@ async function handleRegister() {
             <el-input v-model="loginForm.password" :prefix-icon="Lock" type="password" size="large" show-password placeholder="请输入密码" />
           </el-form-item>
           <el-button type="primary" size="large" :loading="loading" class="login-btn" native-type="submit">
-            登录系统
+            <span class="btn-text">登录系统</span>
+            <span class="btn-arrow">→</span>
           </el-button>
         </el-form>
 
-        <el-form v-else :model="registerForm" class="login-form register-form" @submit.prevent="handleRegister">
-          <el-form-item class="full">
-            <el-input v-model="registerForm.username" :prefix-icon="User" size="large" placeholder="用户账号（必填）" />
-          </el-form-item>
-          <el-form-item class="full">
-            <el-input v-model="registerForm.password" :prefix-icon="Lock" type="password" size="large" show-password placeholder="登录密码（必填）" />
-          </el-form-item>
-          <el-form-item>
-            <el-input v-model="registerForm.fullName" :prefix-icon="UserFilled" size="large" placeholder="真实姓名" />
-          </el-form-item>
-          <el-form-item>
-            <el-select
-              v-model="registerForm.roleCode"
-              size="large"
-              class="role-select"
-              placeholder="选择角色"
-              @change="(val) => {
-                const target = ROLES.find((item) => item.value === val)
-                if (target) registerForm.position = target.label
-              }"
-            >
-              <el-option
-                v-for="role in roleOptions"
-                :key="role.value"
-                :label="role.label"
-                :value="role.value"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-input v-model="registerForm.department" :prefix-icon="OfficeBuilding" size="large" placeholder="所属部门" />
-          </el-form-item>
-          <el-form-item>
-            <el-input v-model="registerForm.contact" :prefix-icon="Phone" size="large" placeholder="联系方式" />
-          </el-form-item>
-          <el-button type="primary" size="large" :loading="loading" class="login-btn" native-type="submit">
-            创建账号
-          </el-button>
-        </el-form>
+
       </div>
     </section>
   </div>
@@ -243,8 +144,33 @@ async function handleRegister() {
 }
 
 .login-panel {
-  padding: 42px;
+  position: relative;
+  padding: 48px 42px 36px;
   background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-decoration {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #1f5f99 0%, #42b883 100%);
+}
+
+.panel-decoration::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(31, 95, 153, 0.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .brand {
@@ -347,66 +273,99 @@ async function handleRegister() {
 }
 
 .panel-title {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+
+  .title-icon {
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(31, 95, 153, 0.1), rgba(66, 184, 131, 0.1));
+    color: #1f5f99;
+    margin-bottom: 18px;
+  }
 
   h2 {
     color: var(--rtm-text);
-    font-size: 24px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
   }
 
   p {
-    margin-top: 6px;
+    margin-top: 8px;
     color: var(--rtm-text-soft);
     font-size: 13px;
   }
 }
 
-.mode-switch {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
-  margin-bottom: 22px;
-  padding: 4px;
-  border: 1px solid #d8dee6;
-  border-radius: 6px;
-  background: #f3f6f9;
-}
-
-.mode-switch button {
-  min-height: 40px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #526170;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.mode-switch button.active {
-  background: #1f5f99;
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(31, 95, 153, 0.22);
+.login-form {
+  flex: 1;
 }
 
 .login-form :deep(.el-form-item) {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
-.register-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 12px;
+.login-form :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  transition: box-shadow 0.2s ease;
 }
 
-.register-form .full,
-.register-form .login-btn {
-  grid-column: 1 / -1;
+.login-form :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #1f5f99 inset, 0 0 0 3px rgba(31, 95, 153, 0.1);
 }
 
-.role-select,
 .login-btn {
   width: 100%;
+  height: 46px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.login-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(31, 95, 153, 0.28);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+.btn-arrow {
+  font-size: 18px;
+  transition: transform 0.15s ease;
+}
+
+.login-btn:hover .btn-arrow {
+  transform: translateX(4px);
+}
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f2f5;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.footer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #42b883;
+  box-shadow: 0 0 0 3px rgba(66, 184, 131, 0.15);
 }
 
 @media (max-width: 820px) {
@@ -416,10 +375,6 @@ async function handleRegister() {
 
   .login-info {
     display: none;
-  }
-
-  .register-form {
-    grid-template-columns: 1fr;
   }
 }
 </style>

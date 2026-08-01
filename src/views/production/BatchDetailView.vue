@@ -117,7 +117,7 @@ onMounted(() => {
           <span v-if="item.sequence"> - 工序{{ item.sequence }}</span>
           <p class="muted" v-if="item.quantity">数量: {{ item.quantity }}</p>
           <p class="muted" v-if="item.defectQuantity">不良: {{ item.defectQuantity }}</p>
-          <p class="muted" v-if="item.passRate !== undefined">通过率: {{ item.passRate }}%</p>
+          <p class="muted" v-if="item.eventType === 'station_out' && item.passRate != null && item.passRate > 0">通过率: {{ item.passRate }}%</p>
         </el-timeline-item>
       </el-timeline>
     </SectionCard>

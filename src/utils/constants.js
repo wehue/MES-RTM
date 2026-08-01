@@ -6,9 +6,6 @@ export const ROLES = [
   { value: 'QUALITY_ENGINEER', label: '质量工程师' },
 ]
 
-// 默认注册角色：新用户注册后由前端兜底赋予的操作工角色编码
-export const DEFAULT_REGISTER_ROLE_CODE = 'OPERATOR'
-
 export const PERMISSION_CODES = {
   DASHBOARD: 'dashboard',
   KANBAN: 'kanban',
