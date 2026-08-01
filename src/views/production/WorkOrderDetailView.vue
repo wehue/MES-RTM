@@ -115,10 +115,6 @@ onMounted(() => {
     <div class="page-header">
       <div>
         <h1 class="page-title">{{ baseInfo.workOrderCode || '-' }} 工单详情</h1>
-        <p class="page-subtitle">展示工单字段、产品 BOM、工艺路线和拆分批次，页面展示字段均由 SQL 表关联得到。</p>
-      </div>
-      <div class="table-actions">
-        <el-button @click="ElMessage.success('已调用打印生产任务单')">打印任务单</el-button>
       </div>
     </div>
 
