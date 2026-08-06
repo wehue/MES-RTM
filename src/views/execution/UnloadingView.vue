@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Box,
@@ -16,11 +16,6 @@ import {
   getStationHistory as getStationHistoryApi,
 } from '@/api/unloading'
 import {
-  findStation,
-  findOperation,
-  findEquipment,
-  findEquipmentType,
-  routeSteps,
   users,
   UNLOAD_REASON,
   UNLOAD_REASON_TEXT,
@@ -30,8 +25,9 @@ import {
   getStationLoadingAndUnloadingHistory,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
+// TODO(backend): 后续补充「已投产批次列表」与「批次工站列表」接口后，
+// 用真实 API 替换下方 mock 数据（见 mockProducingBatches / mockBatchStationsMap）
 
-const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -74,37 +70,191 @@ function getOperatorLabel(user) {
   return [name, position, dept].filter(Boolean).join(' / ')
 }
 
-// ==================== 工站列表 ====================
+// ==================== 已投产批次 + 批次工站（与上料管理一致） ====================
+// ① 选中的已投产批次（Tab1 下料操作）
+const selectedBatchId = ref(null)
+// ② 选中的工站（Tab1 下料操作）
 const selectedStationId = ref(null)
 
-const stationList = computed(() => {
-  return routeSteps
-    .slice()
-    .sort((a, b) => a.Sequence - b.Sequence)
-    .map((step) => {
-      const station = findStation(step.StationId)
-      const operation = findOperation(step.OperationId)
-      const equip = findEquipment(step.EquipmentId)
-      const equipType = findEquipmentType(step.EquipmentTypeId)
-      return {
-        routeStepId: step.Id,
-        stationId: step.StationId,
-        equipmentId: step.EquipmentId,
-        equipmentTypeId: step.EquipmentTypeId,
-        sequence: step.Sequence,
-        stationCode: station?.StationCode || '-',
-        stationName: station?.StationName || '-',
-        operationName: operation?.OperationName || '-',
-        equipmentCode: equip?.EquipmentCode || '-',
-        equipmentName: equip?.EquipmentName || '-',
-        equipmentTypeName: equipType?.EquipmentTypeName || '-',
-      }
-    })
+// ---------- TODO(backend): 以下为模拟数据，待后端接口补充后替换 ----------
+const mockProducingBatches = [
+  {
+    id: 1001,
+    lotCode: 'B20260805001',
+    workOrderCode: 'WO20260805001',
+    productName: '智能控制板 V2.0',
+    lineName: 'SMT产线 A1',
+    currentOperation: '贴片',
+    status: 2,
+    plannedQuantity: 600,
+    completedQuantity: 120,
+  },
+  {
+    id: 1002,
+    lotCode: 'B20260805002',
+    workOrderCode: 'WO20260805002',
+    productName: '电源驱动板 V3.0',
+    lineName: 'SMT产线 A2',
+    currentOperation: '印刷',
+    status: 2,
+    plannedQuantity: 800,
+    completedQuantity: 0,
+  },
+  {
+    id: 1003,
+    lotCode: 'B20260805003',
+    workOrderCode: 'WO20260805003',
+    productName: '通信模块 V1.5',
+    lineName: 'SMT产线 A1',
+    currentOperation: '回流',
+    status: 2,
+    plannedQuantity: 1000,
+    completedQuantity: 560,
+  },
+]
+
+// 模拟「批次已上料工站列表」（按批次 id 索引）
+// 注意：下料的前提是工站已上料，因此这里只列出该批次【实际已上料】的工站
+//       （是工艺路线的子集），避免用户选到没有料可下的工站点空。
+// 后续接口候选：GET /api/loading/batch-loaded-stations?batchId={lotId}
+//   或复用 GET /api/loading/stations/records 按 batchId/lotId 聚合去重
+const mockBatchStationsMap = {
+  1001: [
+    { id: 201, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
+    { id: 203, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
+  ],
+  1002: [
+    { id: 211, stationCode: 'ST-A2-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
+  ],
+  1003: [
+    { id: 221, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
+    { id: 222, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
+    { id: 223, stationCode: 'ST-A1-04', stationName: '回流焊接工站', operationName: '回流焊接', equipmentTypeName: '回流炉', sequence: 40 },
+  ],
+}
+// ---------- 模拟数据结束 ----------
+
+// 批次列表（Tab1 与 Tab2 共享）
+const batchList = ref([])
+const batchListLoading = ref(false)
+
+// Tab1 下料操作：当前批次的工站列表
+const batchStations = ref([])
+const batchStationsLoading = ref(false)
+
+// Tab2 历史记录：独立的批次/工站选择
+const historyBatchId = ref(null)
+const historyStationId = ref(null)
+const historyBatchStations = ref([])
+const historyBatchStationsLoading = ref(false)
+
+function normalizeLoadingStation(item, index) {
+  if (!item) return null
+  const id = item.id ?? item.Id ?? item.stationId ?? item.StationId
+  const stationCode = item.stationCode ?? item.StationCode ?? '-'
+  const stationName = item.stationName ?? item.StationName ?? '-'
+  const operationName = item.operationName ?? item.OperationName ?? '-'
+  const equipmentTypeName = item.equipmentTypeName ?? item.EquipmentTypeName ?? '-'
+  return {
+    ...item,
+    id,
+    routeStepId: id,
+    stationId: id,
+    equipmentId: item.equipmentId ?? item.EquipmentId ?? id,
+    equipmentTypeId: item.equipmentTypeId ?? item.EquipmentTypeId,
+    sequence: item.sequence ?? item.Sequence ?? index + 1,
+    stationCode,
+    stationName,
+    operationName,
+    equipmentCode: item.equipmentCode ?? item.EquipmentCode ?? stationCode,
+    equipmentName: item.equipmentName ?? item.EquipmentName ?? stationName,
+    equipmentTypeName,
+  }
+}
+
+// 加载已投产批次列表
+// TODO(backend): 替换为真实接口（候选 GET /api/lots/pending-loading/list 或 GET /api/lots?status=2）
+async function loadBatchList() {
+  batchListLoading.value = true
+  try {
+    await new Promise((r) => setTimeout(r, 150))
+    batchList.value = mockProducingBatches.map((b) => ({ ...b }))
+    console.log('[Unloading] 已投产批次列表（mock）：', batchList.value.length, '条')
+  } catch (error) {
+    console.warn('[Unloading] 已投产批次列表加载失败：', error)
+    batchList.value = []
+    ElMessage.warning('已投产批次列表接口暂不可用，请稍后重试')
+  } finally {
+    batchListLoading.value = false
+  }
+}
+
+// 按批次 id 加载【已上料】工站列表（Tab1 下料用，只含已上料工站，避免选空）
+// TODO(backend): 替换为真实接口（候选 GET /api/loading/batch-loaded-stations?batchId={lotId}）
+async function loadBatchStations(batchId) {
+  if (!batchId) {
+    batchStations.value = []
+    return
+  }
+  batchStationsLoading.value = true
+  try {
+    await new Promise((r) => setTimeout(r, 120))
+    const raw = mockBatchStationsMap[batchId] || []
+    const list = raw.map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
+    list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+    batchStations.value = list
+  } catch (error) {
+    console.warn('[Unloading] 批次工站列表加载失败：', error)
+    batchStations.value = []
+    ElMessage.warning('批次工站列表接口暂不可用，请稍后重试')
+  } finally {
+    batchStationsLoading.value = false
+  }
+}
+
+// 按批次 id 加载【已上料】工站列表（Tab2 历史记录用，独立缓存，只含已上料工站）
+async function loadHistoryBatchStations(batchId) {
+  if (!batchId) {
+    historyBatchStations.value = []
+    return
+  }
+  historyBatchStationsLoading.value = true
+  try {
+    await new Promise((r) => setTimeout(r, 120))
+    const raw = mockBatchStationsMap[batchId] || []
+    const list = raw.map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
+    list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+    historyBatchStations.value = list
+  } catch (error) {
+    console.warn('[Unloading] 历史批次工站列表加载失败：', error)
+    historyBatchStations.value = []
+  } finally {
+    historyBatchStationsLoading.value = false
+  }
+}
+
+// Tab1 当前选中的批次
+const currentBatch = computed(() => {
+  if (!selectedBatchId.value) return null
+  return batchList.value.find((b) => b.id === selectedBatchId.value) || null
 })
 
+// Tab1 当前选中的工站
 const currentStation = computed(() => {
   if (!selectedStationId.value) return null
-  return stationList.value.find((s) => s.routeStepId === selectedStationId.value) || null
+  return batchStations.value.find((s) => s.routeStepId === selectedStationId.value) || null
+})
+
+// Tab2 当前选中的批次
+const historyBatch = computed(() => {
+  if (!historyBatchId.value) return null
+  return batchList.value.find((b) => b.id === historyBatchId.value) || null
+})
+
+// Tab2 当前选中的工站
+const historyStation = computed(() => {
+  if (!historyStationId.value) return null
+  return historyBatchStations.value.find((s) => s.routeStepId === historyStationId.value) || null
 })
 
 // ==================== Tab 1: 下料操作 ====================
@@ -278,14 +428,8 @@ async function submitUnloading() {
 }
 
 // ==================== Tab 2: 工站上下料记录 ====================
-const historyStationId = ref(null)
 const historyLoading = ref(false)
 const historyList = ref([])
-
-const historyStation = computed(() => {
-  if (!historyStationId.value) return null
-  return stationList.value.find((s) => s.routeStepId === historyStationId.value) || null
-})
 
 async function loadHistory() {
   if (!historyStation.value) {
@@ -318,6 +462,21 @@ const historySummary = computed(() => {
 })
 
 // ==================== 监听与初始化 ====================
+// Tab1：切换批次时 → 加载该批次工站 + 重置工站选择与下料表单
+watch(selectedBatchId, async (newBatchId) => {
+  selectedStationId.value = null
+  batchStations.value = []
+  selectedLoadingRecordIds.value = []
+  unloadableList.value = []
+  unloadForm.unloadQuantity = 0
+  unloadForm.reasonCode = ''
+  unloadForm.remark = ''
+  if (newBatchId) {
+    await loadBatchStations(newBatchId)
+  }
+})
+
+// Tab1：切换工站时 → 重置下料表单并加载可下料记录
 watch(selectedStationId, () => {
   selectedLoadingRecordIds.value = []
   unloadForm.unloadQuantity = 0
@@ -326,6 +485,17 @@ watch(selectedStationId, () => {
   loadUnloadableList()
 })
 
+// Tab2：切换批次时 → 加载该批次工站 + 重置工站选择与历史
+watch(historyBatchId, async (newBatchId) => {
+  historyStationId.value = null
+  historyBatchStations.value = []
+  historyList.value = []
+  if (newBatchId) {
+    await loadHistoryBatchStations(newBatchId)
+  }
+})
+
+// Tab2：切换工站时 → 加载历史记录
 watch(historyStationId, () => {
   loadHistory()
 })
@@ -346,15 +516,7 @@ watch(operatorList, (list) => {
 })
 
 onMounted(async () => {
-  await loadOperatorList()
-  // 支持从 URL 参数自动选中工站（进站校验失败跳转场景）
-  const stationIdParam = route.query.stationId
-  if (stationIdParam) {
-    const target = stationList.value.find((s) => s.stationId === Number(stationIdParam))
-    if (target) {
-      selectedStationId.value = target.routeStepId
-    }
-  }
+  await Promise.all([loadOperatorList(), loadBatchList()])
 })
 </script>
 
@@ -381,11 +543,77 @@ onMounted(async () => {
           <span class="tab-label">下料操作</span>
         </template>
 
-        <!-- 步骤 1: 选择工站 -->
-        <SectionCard title="① 选择工站">
-          <div class="station-flex">
+        <!-- 步骤 1: 选择已投产批次 -->
+        <SectionCard title="① 选择已投产批次">
+          <div class="station-flex" v-loading="batchListLoading">
+            <el-empty
+              v-if="!batchListLoading && !batchList.length"
+              description="暂无已投产批次"
+              :image-size="80"
+            />
             <div
-              v-for="station in stationList"
+              v-for="batch in batchList"
+              :key="batch.id"
+              class="station-card batch-card"
+              :class="{ active: selectedBatchId === batch.id }"
+              @click="selectedBatchId = batch.id"
+            >
+              <div class="station-card-header">
+                <span class="station-seq">批</span>
+                <span class="station-code" :title="batch.lotCode">{{ batch.lotCode }}</span>
+                <el-tag
+                  v-if="batch.currentOperation"
+                  size="small"
+                  type="success"
+                  effect="plain"
+                  round
+                >{{ batch.currentOperation }}</el-tag>
+              </div>
+              <div class="station-card-body">
+                <div class="station-info-row" v-if="batch.productName">
+                  <span class="label">产品</span>
+                  <span class="value" :title="batch.productName">{{ batch.productName }}</span>
+                </div>
+                <div class="station-info-row" v-if="batch.workOrderCode">
+                  <span class="label">工单</span>
+                  <span class="value" :title="batch.workOrderCode">{{ batch.workOrderCode }}</span>
+                </div>
+                <div class="station-info-row" v-if="batch.lineName">
+                  <span class="label">产线</span>
+                  <span class="value" :title="batch.lineName">{{ batch.lineName }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        <!-- 步骤 2: 选择工站 -->
+        <SectionCard v-if="currentBatch" title="② 选择工站" class="mt-16">
+          <div class="current-context-bar">
+            <div class="context-item">
+              <span class="context-label">批次号</span>
+              <span class="context-value">{{ currentBatch.lotCode }}</span>
+            </div>
+            <el-divider direction="vertical" />
+            <div class="context-item">
+              <span class="context-label">产品</span>
+              <span class="context-value">{{ currentBatch.productName }}</span>
+            </div>
+            <el-divider direction="vertical" />
+            <div class="context-item">
+              <span class="context-label">当前工序</span>
+              <el-tag size="small" type="success" effect="plain">{{ currentBatch.currentOperation || '-' }}</el-tag>
+            </div>
+          </div>
+
+          <div class="station-flex" v-loading="batchStationsLoading">
+            <el-empty
+              v-if="!batchStationsLoading && !batchStations.length"
+              description="该批次暂无已上料工站，无可下料物料"
+              :image-size="80"
+            />
+            <div
+              v-for="station in batchStations"
               :key="station.routeStepId"
               class="station-card"
               :class="{ active: selectedStationId === station.routeStepId }"
@@ -393,7 +621,7 @@ onMounted(async () => {
             >
               <div class="station-card-header">
                 <span class="station-seq">{{ station.sequence }}</span>
-                <span class="station-code">{{ station.stationCode }}</span>
+                <span class="station-code" :title="station.stationCode">{{ station.stationCode }}</span>
                 <el-tag size="small" type="info" effect="plain" round>{{ station.operationName }}</el-tag>
               </div>
               <div class="station-card-body">
@@ -410,9 +638,14 @@ onMounted(async () => {
           </div>
         </SectionCard>
 
-        <!-- 步骤 2: 下料录入 -->
-        <SectionCard v-if="currentStation" title="② 下料录入" class="mt-16">
+        <!-- 步骤 3: 下料录入 -->
+        <SectionCard v-if="currentStation" title="③ 下料录入" class="mt-16">
           <div class="current-context-bar">
+            <div class="context-item">
+              <span class="context-label">批次号</span>
+              <span class="context-value">{{ currentBatch.lotCode }}</span>
+            </div>
+            <el-divider direction="vertical" />
             <div class="context-item">
               <span class="context-label">工站</span>
               <span class="context-value">{{ currentStation.stationName }}</span>
@@ -571,10 +804,77 @@ onMounted(async () => {
           <span class="tab-label">工站上下料记录</span>
         </template>
 
-        <SectionCard title="选择工站">
-          <div class="station-flex">
+        <!-- 步骤 1: 选择已投产批次 -->
+        <SectionCard title="① 选择已投产批次">
+          <div class="station-flex" v-loading="batchListLoading">
+            <el-empty
+              v-if="!batchListLoading && !batchList.length"
+              description="暂无已投产批次"
+              :image-size="80"
+            />
             <div
-              v-for="station in stationList"
+              v-for="batch in batchList"
+              :key="batch.id"
+              class="station-card batch-card"
+              :class="{ active: historyBatchId === batch.id }"
+              @click="historyBatchId = batch.id"
+            >
+              <div class="station-card-header">
+                <span class="station-seq">批</span>
+                <span class="station-code" :title="batch.lotCode">{{ batch.lotCode }}</span>
+                <el-tag
+                  v-if="batch.currentOperation"
+                  size="small"
+                  type="success"
+                  effect="plain"
+                  round
+                >{{ batch.currentOperation }}</el-tag>
+              </div>
+              <div class="station-card-body">
+                <div class="station-info-row" v-if="batch.productName">
+                  <span class="label">产品</span>
+                  <span class="value" :title="batch.productName">{{ batch.productName }}</span>
+                </div>
+                <div class="station-info-row" v-if="batch.workOrderCode">
+                  <span class="label">工单</span>
+                  <span class="value" :title="batch.workOrderCode">{{ batch.workOrderCode }}</span>
+                </div>
+                <div class="station-info-row" v-if="batch.lineName">
+                  <span class="label">产线</span>
+                  <span class="value" :title="batch.lineName">{{ batch.lineName }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        <!-- 步骤 2: 选择工站 -->
+        <SectionCard v-if="historyBatch" title="② 选择工站" class="mt-16">
+          <div class="current-context-bar">
+            <div class="context-item">
+              <span class="context-label">批次号</span>
+              <span class="context-value">{{ historyBatch.lotCode }}</span>
+            </div>
+            <el-divider direction="vertical" />
+            <div class="context-item">
+              <span class="context-label">产品</span>
+              <span class="context-value">{{ historyBatch.productName }}</span>
+            </div>
+            <el-divider direction="vertical" />
+            <div class="context-item">
+              <span class="context-label">当前工序</span>
+              <el-tag size="small" type="success" effect="plain">{{ historyBatch.currentOperation || '-' }}</el-tag>
+            </div>
+          </div>
+
+          <div class="station-flex" v-loading="historyBatchStationsLoading">
+            <el-empty
+              v-if="!historyBatchStationsLoading && !historyBatchStations.length"
+              description="该批次暂无已上料工站，无上下料记录"
+              :image-size="80"
+            />
+            <div
+              v-for="station in historyBatchStations"
               :key="station.routeStepId"
               class="station-card"
               :class="{ active: historyStationId === station.routeStepId }"
@@ -582,13 +882,17 @@ onMounted(async () => {
             >
               <div class="station-card-header">
                 <span class="station-seq">{{ station.sequence }}</span>
-                <span class="station-code">{{ station.stationCode }}</span>
+                <span class="station-code" :title="station.stationCode">{{ station.stationCode }}</span>
                 <el-tag size="small" type="info" effect="plain" round>{{ station.operationName }}</el-tag>
               </div>
               <div class="station-card-body">
                 <div class="station-info-row">
                   <span class="label">工站</span>
                   <span class="value">{{ station.stationName }}</span>
+                </div>
+                <div class="station-info-row">
+                  <span class="label">设备类型</span>
+                  <span class="value">{{ station.equipmentTypeName }}</span>
                 </div>
               </div>
             </div>
@@ -776,6 +1080,23 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* 批次卡片：序号方块用绿色调与工站卡片区分 */
+.batch-card .station-seq {
+  background: #67c23a;
+  width: 28px;
+  font-size: 11px;
+}
+
+.batch-card.active {
+  border-color: #67c23a;
+  background: linear-gradient(135deg, #f0f9eb 0%, #f5fbf0 100%);
+  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.18);
+}
+
+.batch-card.active::before {
+  background: #67c23a;
 }
 
 .station-code {

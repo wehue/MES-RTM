@@ -32,19 +32,25 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => {
     NProgress.done()
-    const { code, data, message } = response.data
+    const body = response.data
+    // 非 JSON 响应（如文件下载）直接返回
+    if (typeof body !== 'object' || body === null) return body
+    // 后端未采用 { code, message, data } 标准包装时，直接返回 body 本身
+    // （如分页接口直接返回 { pageNum, pageSize, total, list } 或数组）
+    if (!('code' in body) && !('Code' in body)) return body
+    const { code, data, message } = body
     if (code === 200 || code === 0 || (code >= 200 && code < 300)) {
       return data
     }
     // 业务层返回 401 状态码（token 过期/无效）
     if (code === 401) {
       handleTokenExpired(message)
-      return Promise.reject({ message: message || '登录已过期', response: response.data })
+      return Promise.reject({ message: message || '登录已过期', response: body })
     }
     ElMessage.error(message || '请求失败')
     return Promise.reject({
       message: message || '请求失败',
-      response: response.data
+      response: body
     })
   },
   (error) => {

@@ -1452,34 +1452,47 @@ export function findMaterialLotsByMaterialCode(materialCode) {
 
 // 带筛选的物料批次列表查询
 export function getMaterialLotList(filters = {}) {
+  // 同时兼容新 query 参数（与后端接口一致）和旧 PascalCase 参数
+  const materialCode = filters.materialCode ?? filters.MaterialCode
+  const status = filters.status ?? filters.Status
+  const supplier = filters.supplier ?? filters.Supplier
+  const keyword = filters.keyword ?? filters.BatchNo
+  const expiryStart = filters.expiryStart ?? filters.ExpiryDateStart
+  const expiryEnd = filters.expiryEnd ?? filters.ExpiryDateEnd
+  const inboundStart = filters.inboundStart ?? filters.InboundDateStart
+  const inboundEnd = filters.inboundEnd ?? filters.InboundDateEnd
+
   let list = [...materialLots]
-  if (filters.MaterialCode) {
-    list = list.filter((item) => item.MaterialCode === filters.MaterialCode)
+  if (materialCode) {
+    list = list.filter((item) => item.MaterialCode === materialCode)
   }
-  if (filters.Status) {
-    list = list.filter((item) => item.Status === filters.Status)
+  if (status) {
+    list = list.filter((item) => item.Status === status)
   }
-  if (filters.Supplier) {
-    const kw = String(filters.Supplier).toLowerCase()
+  if (supplier) {
+    const kw = String(supplier).toLowerCase()
     list = list.filter((item) => String(item.Supplier || '').toLowerCase().includes(kw))
   }
-  if (filters.BatchNo) {
-    const kw = String(filters.BatchNo).toLowerCase()
-    list = list.filter((item) => String(item.BatchNo || '').toLowerCase().includes(kw) || String(item.Barcode || '').toLowerCase().includes(kw))
+  if (keyword) {
+    const kw = String(keyword).toLowerCase()
+    list = list.filter((item) =>
+      String(item.BatchNo || '').toLowerCase().includes(kw)
+      || String(item.Barcode || '').toLowerCase().includes(kw),
+    )
   }
   // 有效期范围筛选
-  if (filters.ExpiryDateStart) {
-    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) >= filters.ExpiryDateStart)
+  if (expiryStart) {
+    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) >= String(expiryStart).slice(0, 10))
   }
-  if (filters.ExpiryDateEnd) {
-    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) <= filters.ExpiryDateEnd)
+  if (expiryEnd) {
+    list = list.filter((item) => item.ExpiryDate && String(item.ExpiryDate) <= String(expiryEnd).slice(0, 10))
   }
-  // 入库日期范围筛选
-  if (filters.InboundDateStart) {
-    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) >= filters.InboundDateStart)
+  // 入库日期范围筛选（inboundStart/inboundEnd 可能是 datetime，截取日期部分比较）
+  if (inboundStart) {
+    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) >= String(inboundStart).slice(0, 10))
   }
-  if (filters.InboundDateEnd) {
-    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) <= filters.InboundDateEnd)
+  if (inboundEnd) {
+    list = list.filter((item) => String(item.InboundDate || '').slice(0, 10) <= String(inboundEnd).slice(0, 10))
   }
   // 过期状态筛选
   if (filters.ExpiryStatus === 'expired') {
@@ -1496,30 +1509,40 @@ export function getMaterialLotList(filters = {}) {
 
 // 本地创建物料批次（BatchNo 和 Barcode 由后端生成，Mock 模式下本地生成）
 export function createMaterialLot(payload) {
-  const material = materials.find((item) => item.MaterialCode === payload.MaterialCode)
+  // 同时兼容小驼峰（接口字段）和 PascalCase（旧字段）两种入参
+  const materialCode = payload.materialCode ?? payload.MaterialCode
+  const inboundQuantity = payload.inboundQuantity ?? payload.Quantity
+  const inboundDate = payload.inboundDate ?? payload.InboundDate
+  const supplier = payload.supplier ?? payload.Supplier
+  const supplierBatchNo = payload.supplierBatchNo ?? payload.SupplierBatchNo
+  const productionDate = payload.productionDate ?? payload.ProductionDate
+  const expiryDate = payload.expiryDate ?? payload.ExpiryDate
+  const mslLevel = payload.mslLevel ?? payload.MslLevel
+
+  const material = materials.find((item) => item.MaterialCode === materialCode)
   if (!material) return { ok: false, message: '物料编码不存在' }
-  const quantity = Number(payload.Quantity) || 0
+  const quantity = Number(inboundQuantity) || 0
   if (quantity <= 0) return { ok: false, message: '入库数量必须大于 0' }
 
   const newId = materialLots.length ? Math.max(...materialLots.map((item) => item.Id)) + 1 : 1
-  // Mock 模式下本地生成 BatchNo 和 Barcode（真实环境由后端返回）
+  // Mock 模式下本地生成 BatchNo 和 Barcode（真实环境由后端返回，规则：yyyyMMdd+4位流水号 / 物料编码#批次号）
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-  const seq = String(materialLots.filter((item) => item.MaterialCode === payload.MaterialCode).length + 1).padStart(2, '0')
+  const seq = String(materialLots.filter((item) => item.MaterialCode === materialCode).length + 1).padStart(2, '0')
   const batchNo = `LOT${dateStr}-${seq}`
-  const barcode = `${payload.MaterialCode}#${batchNo}`
+  const barcode = `${materialCode}#${batchNo}`
 
   const newLot = {
     Id: newId,
-    MaterialCode: payload.MaterialCode,
+    MaterialCode: materialCode,
     BatchNo: batchNo,
-    Supplier: payload.Supplier || '',
-    SupplierBatchNo: payload.SupplierBatchNo || '',
+    Supplier: supplier || '',
+    SupplierBatchNo: supplierBatchNo || '',
     Quantity: quantity,
     UsedQuantity: 0,
-    ProductionDate: payload.ProductionDate || null,
-    ExpiryDate: payload.ExpiryDate || null,
-    MslLevel: payload.MslLevel || null,
-    InboundDate: payload.InboundDate || nowText(),
+    ProductionDate: productionDate || null,
+    ExpiryDate: expiryDate || null,
+    MslLevel: mslLevel || null,
+    InboundDate: inboundDate || nowText(),
     Status: '在库',
     Barcode: barcode,
     ...auditFields(nowText(), '物料入库'),
