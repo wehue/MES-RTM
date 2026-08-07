@@ -9,13 +9,14 @@ import {
   createMaterialLot as createMaterialLotApi,
   updateMaterialLotStatus as updateMaterialLotStatusApi,
   getMaterialLotBarcodeOptions,
+  getPendingLoadingLots,
+  getLoadingStations,
   getStationLoadingRecords as getStationLoadingRecordsApi,
   createLoadingRecords,
   verifyLoadingRecord,
 } from '@/api/materialLot'
-// TODO(backend): 后续补充「已投产批次列表」与「批次工站列表」接口后，
-// 用真实 API 替换下方 mock 数据（见 mockProducingBatches / mockBatchStationsMap）
 import { getMaterialOptions } from '@/api/material'
+import { formatDate, formatDateTime } from '@/utils/format'
 
 const router = useRouter()
 
@@ -204,18 +205,10 @@ function resetFilters() {
   loadLotList()
 }
 
-// 统一格式化时间字段：纯日期保留 yyyy-MM-dd；带时间则展示 yyyy-MM-dd HH:mm
-function formatDateTime(value) {
-  if (!value) return '-'
-  const s = String(value).trim()
-  if (!s) return '-'
-  // 带时间格式：将 T 或空格统一
-  const normalized = s.replace('T', ' ')
-  // 如果包含 HH:mm:ss.fff 则截取到分
-  if (/^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{1,2}/.test(normalized)) {
-    return normalized.slice(0, 16) // yyyy-MM-dd HH:mm
-  }
-  return normalized.slice(0, 10) // 纯日期
+// 统一格式化日期字段：纯日期用 YYYY-MM-DD
+// （底层走 utils/format.js 的 formatDate(value, 'YYYY-MM-DD')，空值返回空串，模板层再用 || '-'）
+function _fmtDate(v) {
+  return formatDate(v, 'YYYY-MM-DD')
 }
 
 // 将仅日期的字符串（yyyy-MM-dd）补齐为 LocalDateTime 格式
@@ -491,67 +484,89 @@ const selectedStationId = ref(null)
 const loadingRows = ref([])
 const submitting = ref(false)
 
-// ---------- TODO(backend): 以下为模拟数据，待后端接口补充后替换 ----------
-// 模拟「已投产批次列表」（生产中状态）
-// 后续接口候选：GET /api/lots/pending-loading/list 或 GET /api/lots?status=2
-const mockProducingBatches = [
-  {
-    id: 1001,
-    lotCode: 'B20260805001',
-    workOrderCode: 'WO20260805001',
-    productName: '智能控制板 V2.0',
-    lineName: 'SMT产线 A1',
-    currentOperation: '贴片',
-    status: 2, // 生产中
-    plannedQuantity: 600,
-    completedQuantity: 120,
-  },
-  {
-    id: 1002,
-    lotCode: 'B20260805002',
-    workOrderCode: 'WO20260805002',
-    productName: '电源驱动板 V3.0',
-    lineName: 'SMT产线 A2',
-    currentOperation: '印刷',
-    status: 2,
-    plannedQuantity: 800,
-    completedQuantity: 0,
-  },
-  {
-    id: 1003,
-    lotCode: 'B20260805003',
-    workOrderCode: 'WO20260805003',
-    productName: '通信模块 V1.5',
-    lineName: 'SMT产线 A1',
-    currentOperation: '回流',
-    status: 2,
-    plannedQuantity: 1000,
-    completedQuantity: 560,
-  },
-]
-
-// 模拟「批次对应的工站列表」（按批次 id 索引，工站顺序 = 工艺路线顺序）
-// 后续接口候选：GET /api/lots/detail?id={lotId} 返回的工艺路线字段，或新增 GET /api/loading/batch-stations
-const mockBatchStationsMap = {
-  1001: [
-    { id: 201, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-    { id: 202, stationCode: 'ST-A1-02', stationName: 'SPI检测工站', operationName: 'SPI检测', equipmentTypeName: 'SPI', sequence: 20 },
-    { id: 203, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
-    { id: 204, stationCode: 'ST-A1-04', stationName: '回流焊接工站', operationName: '回流焊接', equipmentTypeName: '回流炉', sequence: 40 },
-    { id: 205, stationCode: 'ST-A1-05', stationName: 'AOI检测工站', operationName: 'AOI检测', equipmentTypeName: 'AOI', sequence: 50 },
-  ],
-  1002: [
-    { id: 211, stationCode: 'ST-A2-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-    { id: 212, stationCode: 'ST-A2-02', stationName: 'SPI检测工站', operationName: 'SPI检测', equipmentTypeName: 'SPI', sequence: 20 },
-    { id: 213, stationCode: 'ST-A2-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
-  ],
-  1003: [
-    { id: 221, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-    { id: 222, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
-    { id: 223, stationCode: 'ST-A1-04', stationName: '回流焊接工站', operationName: '回流焊接', equipmentTypeName: '回流炉', sequence: 40 },
-  ],
+// 归一化待上料批次字段：兼容后端返回的多种命名
+function normalizePendingLot(item) {
+  if (!item) return null
+  const id = item.id ?? item.Id ?? item.lotId ?? item.LotId
+  if (id == null) return null
+  return {
+    ...item,
+    id,
+    lotCode: item.lotCode ?? item.LotCode ?? '',
+    productName: item.productName ?? item.ProductName ?? '',
+    workOrderCode: item.workOrderCode ?? item.WorkOrderCode ?? '',
+    lineName: item.lineName ?? item.LineName ?? '',
+    currentOperation: item.currentOperation
+      ?? item.currentOperationName
+      ?? item.CurrentOperation
+      ?? item.CurrentOperationName
+      ?? '',
+  }
 }
-// ---------- 模拟数据结束 ----------
+
+// ① 加载已投产（待上料）批次列表（真实 API：GET /api/loading/pending-lots）
+async function loadBatchList() {
+  batchListLoading.value = true
+  try {
+    console.log('[Loading] GET /api/loading/pending-lots')
+    const data = await getPendingLoadingLots()
+    console.log('[Loading] 待上料批次列表原始返回：', data)
+    let raw = []
+    if (Array.isArray(data)) raw = data
+    else if (data && typeof data === 'object')
+      raw = data.list
+        || data.content
+        || data.records
+        || data.rows
+        || data.items
+        || data.data
+        || (Array.isArray(data.Data) ? data.Data : [])
+    const list = (raw || []).map(normalizePendingLot).filter(Boolean)
+    batchList.value = list
+    console.log('[Loading] 待上料批次列表解析后条数：', list.length)
+  } catch (error) {
+    console.warn('[Loading] 待上料批次列表接口失败：', error)
+    batchList.value = []
+    ElMessage.warning('待上料批次列表接口暂不可用，请稍后重试')
+  } finally {
+    batchListLoading.value = false
+  }
+}
+
+// ② 按批次 id 加载该批次工艺路线下的工站列表（真实 API：GET /api/loading/stations?lotId=xxx）
+async function loadBatchStations(batchId) {
+  if (!batchId) {
+    batchStations.value = []
+    return
+  }
+  batchStationsLoading.value = true
+  try {
+    const params = { lotId: Number(batchId) }
+    console.log('[Loading] GET /api/loading/stations 参数：', params)
+    const data = await getLoadingStations(params)
+    console.log('[Loading] 批次工站列表原始返回：', data)
+    let raw = []
+    if (Array.isArray(data)) raw = data
+    else if (data && typeof data === 'object')
+      raw = data.list
+        || data.content
+        || data.records
+        || data.rows
+        || data.items
+        || data.data
+        || (Array.isArray(data.Data) ? data.Data : [])
+    const list = (raw || []).map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
+    list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+    batchStations.value = list
+    console.log('[Loading] 批次工站列表解析后条数：', list.length)
+  } catch (error) {
+    console.warn('[Loading] 批次工站列表接口失败：', error)
+    batchStations.value = []
+    ElMessage.warning('工站列表接口暂不可用，请稍后重试')
+  } finally {
+    batchStationsLoading.value = false
+  }
+}
 
 async function loadOperatorList() {
   try {
@@ -650,48 +665,6 @@ function normalizeLoadingStation(item, index) {
   }
 }
 
-// 加载已投产批次列表
-// TODO(backend): 替换为真实接口（候选 GET /api/lots/pending-loading/list 或 GET /api/lots?status=2）
-async function loadBatchList() {
-  batchListLoading.value = true
-  try {
-    // 模拟接口延迟
-    await new Promise((r) => setTimeout(r, 150))
-    batchList.value = mockProducingBatches.map((b) => ({ ...b }))
-    console.log('[Loading] 已投产批次列表（mock）：', batchList.value.length, '条')
-  } catch (error) {
-    console.warn('[Loading] 已投产批次列表加载失败：', error)
-    batchList.value = []
-    ElMessage.warning('已投产批次列表接口暂不可用，请稍后重试')
-  } finally {
-    batchListLoading.value = false
-  }
-}
-
-// 按批次 id 加载工站列表
-// TODO(backend): 替换为真实接口（候选 GET /api/lots/detail?id={lotId} 工艺路线字段，或新增 GET /api/loading/batch-stations）
-async function loadBatchStations(batchId) {
-  if (!batchId) {
-    batchStations.value = []
-    return
-  }
-  batchStationsLoading.value = true
-  try {
-    await new Promise((r) => setTimeout(r, 120))
-    const raw = mockBatchStationsMap[batchId] || []
-    const list = raw.map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
-    list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
-    batchStations.value = list
-    console.log('[Loading] 批次工站列表（mock）：', batchId, list.length, '条')
-  } catch (error) {
-    console.warn('[Loading] 批次工站列表加载失败：', error)
-    batchStations.value = []
-    ElMessage.warning('批次工站列表接口暂不可用，请稍后重试')
-  } finally {
-    batchStationsLoading.value = false
-  }
-}
-
 // 当前选中的批次
 const currentBatch = computed(() => {
   if (!selectedBatchId.value) return null
@@ -704,9 +677,10 @@ const currentStation = computed(() => {
   return batchStations.value.find((s) => s.routeStepId === selectedStationId.value) || null
 })
 
-// 物料批次条码下拉选项（接口：GET /api/loading/material-lot-barcode-options，后端已过滤 Status='在库' && CurrentQuantity>0）
-// 策略：接口只加载一次全部 → 缓存到 allBarcodeOptions；remote-method 只做本地过滤，不再每次输入都请求接口
-//       这样避免 filterable+remote 模式下输入/清空时网络请求导致选项闪烁（"一下有一下没"）
+// 物料批次条码下拉选项（接口：GET /api/material-lots/barcode-options）
+// 后端已过滤：status = '在库' AND currentQuantity > 0
+// 策略：首次展开时拉一次「全部」→ 缓存 allBarcodeOptions；搜索框输入时走本地过滤 barcodeRemoteSearch
+//       核心目的：避免 filterable + 每次输入触发远程请求 导致选项闪烁（"一下有一下没"）
 const barcodeOptions = ref([])
 const allBarcodeOptions = ref([]) // 缓存：接口加载的全部条码选项（本地过滤的源数据）
 const barcodeOptionsLoading = ref(false)
@@ -733,12 +707,13 @@ function normalizeBarcodeOption(item) {
   }
 }
 
-// 从接口加载全部条码选项，缓存到 allBarcodeOptions + 同步到 barcodeOptions
-// 不再接受 keyword 做远程搜索 —— 搜索改由 barcodeRemoteSearch 做本地过滤
+// 从接口加载全部在库条码选项，刷新 allBarcodeOptions + barcodeOptions
+// 调用时机：下拉框每次展开（handleBarcodeVisibleChange），保证用户新建的物料批次能立刻出现
+// keyword 在加载时不传，拉"全量在库"；搜索框输入时走本地过滤 barcodeRemoteSearch，不重复请求
 async function loadBarcodeOptions() {
   barcodeOptionsLoading.value = true
   try {
-    console.log('[Loading] GET /api/loading/material-lot-barcode-options（加载全部）')
+    console.log('[Loading] GET /api/material-lots/barcode-options（展开下拉，加载全部在库条码）')
     const data = await getMaterialLotBarcodeOptions({})
     console.log('[Loading] 条码下拉接口原始返回：', data)
 
@@ -803,19 +778,10 @@ function barcodeRemoteSearch(query) {
   })
 }
 
-// 条码下拉可见性变化：每次展开时恢复全部选项 + 首次加载
+// 条码下拉可见性变化：每次展开都重新请求接口，保证用户新建的物料批次能立刻出现在下拉里
 function handleBarcodeVisibleChange(visible) {
   if (!visible) return
-  // 每次展开都恢复全部缓存（避免上次搜索残留导致选项不全）
-  if (allBarcodeOptions.value.length > 0) {
-    barcodeOptions.value = allBarcodeOptions.value
-  }
-  // 首次展开或缓存为空时加载
-  if (!Array.isArray(allBarcodeOptions.value) || allBarcodeOptions.value.length === 0) {
-    nextTick(() => {
-      loadBarcodeOptions().catch(() => {})
-    })
-  }
+  loadBarcodeOptions().catch(() => {})
 }
 
 // 添加一行上料记录
@@ -1020,13 +986,22 @@ async function submitBatchLoading() {
   const station = currentStation.value
   // stationId 优先用 stationId / id / routeStepId
   const stationId = station.stationId ?? station.id ?? station.routeStepId
-  // 构造批量请求 body（与 2.4 接口契约一致：stationId + records[{barcode, loadedQuantity, operatorId}]）
-  const records = validRows.map((row) => ({
-    barcode: row.barcode,
-    loadedQuantity: Number(row.loadingQuantity),
-    operatorId: Number(row.operatorId),
-  }))
-  const payload = { stationId: Number(stationId), records }
+  // lotId 取自当前选中的已投产批次（smt_lots.Id）
+  const lotId = currentBatch.value?.id ?? selectedBatchId.value
+  // 构造批量请求 body（与接口契约一致：lotId + stationId + records）
+  // records[].verifyStatus / verifyRemark 取自前端先调 /api/loading/verify 的返回值，
+  // 后端建议"先调 verify 拿结果再回填这两个字段一起落库"，不传则默认 0=未校验
+  const records = validRows.map((row) => {
+    const v = row.validationResult ?? {}
+    return {
+      barcode: row.barcode,
+      loadedQuantity: Number(row.loadingQuantity),
+      operatorId: Number(row.operatorId),
+      verifyStatus: Number(v.verifyStatusCode ?? 0),
+      verifyRemark: String(v.message ?? ''),
+    }
+  })
+  const payload = { lotId: Number(lotId), stationId: Number(stationId), records }
 
   let successCount = 0
   let failCount = 0
@@ -1069,6 +1044,8 @@ async function submitBatchLoading() {
   // 消息提示
   if (successCount > 0) {
     ElMessage.success(`成功上料 ${successCount} 个物料批次${failCount > 0 ? `，${failCount} 个失败` : ''}`)
+    // 上料成功后物料批次库存/状态已变化，标记切回「物料批次管理」Tab 时需要重新拉列表
+    lotListDirty.value = true
   } else if (failCount > 0 && !failBarcodeToMsg.size) {
     ElMessage.error(`上料失败：${failCount} 个物料批次未提交`)
   }
@@ -1111,6 +1088,9 @@ function getOperatorLabel(user) {
   return [name, position, dept].filter(Boolean).join(' / ')
 }
 
+// 上料录入成功后，物料批次库存/状态已变化，标记需要在切回「物料批次管理」Tab 时重新拉列表
+const lotListDirty = ref(false)
+
 // 当切换批次时：加载该批次的工站列表，并重置已选工站与上料行
 watch(selectedBatchId, async (newBatchId) => {
   selectedStationId.value = null
@@ -1126,11 +1106,37 @@ watch(selectedStationId, () => {
   loadingRows.value = []
 })
 
+// 切回「物料批次管理」Tab 时，如果上料后已标记 dirty，则重新拉取物料批次列表（库存/状态已更新）
+watch(activeTab, (tab) => {
+  if (tab === 'materialLot' && lotListDirty.value) {
+    lotListDirty.value = false
+    loadLotList()
+  }
+})
+
 // ==================== 工站已上料记录查看 ====================
 const stationRecordsDialogVisible = ref(false)
 const stationRecordsLoading = ref(false)
 const stationRecordsList = ref([])
 const stationRecordsOverview = ref({ stationName: '', recordCount: 0, totalLoadedQuantity: 0 })
+
+// 弹窗内「按批次筛选」：默认空 = 查看该工站全部上料记录；选择批次号后本地过滤
+const stationRecordsLotFilter = ref('')
+// 批次选项：从已加载的记录里去重提取（排除 "-" 无批次）
+const stationRecordsLotOptions = computed(() => {
+  const set = new Set()
+  stationRecordsList.value.forEach((r) => {
+    const code = r.BatchNo
+    if (code && code !== '-') set.add(code)
+  })
+  return Array.from(set).map((code) => ({ value: code, label: code }))
+})
+// 过滤后的记录列表
+const filteredStationRecordsList = computed(() => {
+  const f = stationRecordsLotFilter.value
+  if (!f) return stationRecordsList.value
+  return stationRecordsList.value.filter((r) => r.BatchNo === f)
+})
 
 // 校验状态码 → Element Plus tag type 映射
 function getVerifyStatusTagType(code) {
@@ -1195,6 +1201,7 @@ async function viewStationLoadingRecords() {
   if (!currentStation.value) return
   stationRecordsDialogVisible.value = true
   stationRecordsLoading.value = true
+  stationRecordsLotFilter.value = '' // 打开弹窗时重置批次筛选，默认查看全部
   stationRecordsOverview.value = {
     stationName: currentStation.value.stationName || '',
     recordCount: 0,
@@ -1246,9 +1253,8 @@ async function viewStationLoadingRecords() {
 }
 
 const stationRecordsTotal = computed(() => {
-  const fromOverview = Number(stationRecordsOverview.value?.totalLoadedQuantity || 0)
-  if (fromOverview > 0) return fromOverview
-  return stationRecordsList.value.reduce((sum, r) => sum + (Number(r.ActualQuantity) || 0), 0)
+  // 跟随批次筛选：选了批次只统计该批次的上料总量，否则统计全部
+  return filteredStationRecordsList.value.reduce((sum, r) => sum + (Number(r.ActualQuantity) || 0), 0)
 })
 
 onMounted(async () => {
@@ -1281,7 +1287,7 @@ onMounted(async () => {
         <SectionCard title="物料批次列表">
           <template #actions>
             <el-button type="primary" @click="createDialogVisible = true">
-              <el-icon style="margin-right: 4px"><Plus /></el-icon>新建批次
+              <el-icon style="margin-right: 4px"><Plus /></el-icon>新建物料批次
             </el-button>
           </template>
 
@@ -1399,20 +1405,20 @@ onMounted(async () => {
                 </span>
               </template>
             </el-table-column>
-            <el-table-column prop="ProductionDate" label="生产日期" min-width="110" align="center">
-              <template #default="{ row }">{{ row.ProductionDate || '-' }}</template>
+            <el-table-column label="生产日期" min-width="110" align="center">
+              <template #default="{ row }">{{ _fmtDate(row.ProductionDate) || '-' }}</template>
             </el-table-column>
             <el-table-column label="有效期" min-width="120" align="center">
               <template #default="{ row }">
                 <span v-if="!row.ExpiryDate" style="color: var(--rtm-text-muted)">-</span>
                 <template v-else>
-                  <span :class="{ 'expiry-warning': isExpired(row) }">{{ row.ExpiryDate }}</span>
+                  <span :class="{ 'expiry-warning': isExpired(row) }">{{ _fmtDate(row.ExpiryDate) }}</span>
                   <el-tag v-if="isExpired(row)" type="danger" size="small" effect="dark" style="margin-left: 4px">过期</el-tag>
                 </template>
               </template>
             </el-table-column>
             <el-table-column label="入库日期" min-width="160" align="center">
-              <template #default="{ row }">{{ formatDateTime(row.InboundDate) }}</template>
+              <template #default="{ row }">{{ formatDateTime(row.InboundDate) || '-' }}</template>
             </el-table-column>
             <el-table-column prop="MslLevel" label="MSL" width="70" align="center">
               <template #default="{ row }">
@@ -1479,7 +1485,7 @@ onMounted(async () => {
               @click="selectedBatchId = batch.id"
             >
               <div class="station-card-header">
-                <span class="station-seq">批</span>
+                <span class="station-seq">批次</span>
                 <span class="station-code" :title="batch.lotCode">{{ batch.lotCode }}</span>
                 <el-tag
                   v-if="isValidDisplay(batch.currentOperation)"
@@ -1857,20 +1863,35 @@ onMounted(async () => {
           <div class="summary-card-icon count"><el-icon><Document /></el-icon></div>
           <div class="summary-card-content">
             <span class="summary-card-label">上料记录数</span>
-            <span class="summary-card-value">{{ stationRecordsList.length }} 条</span>
-          </div>
-        </div>
-        <div class="summary-card-item">
-          <div class="summary-card-icon qty"><el-icon><Goods /></el-icon></div>
-          <div class="summary-card-content">
-            <span class="summary-card-label">上料总量</span>
-            <span class="summary-card-value">{{ stationRecordsTotal }}</span>
+            <span class="summary-card-value">{{ filteredStationRecordsList.length }} 条</span>
           </div>
         </div>
       </div>
 
+      <!-- 批次筛选：默认查看该工站全部上料记录，可选择批次号缩小范围 -->
+      <div class="records-filter-bar">
+        <span class="filter-label">按批次筛选</span>
+        <el-select
+          v-model="stationRecordsLotFilter"
+          placeholder="全部批次"
+          clearable
+          style="width: 260px"
+          :disabled="stationRecordsLoading || !stationRecordsList.length"
+        >
+          <el-option
+            v-for="opt in stationRecordsLotOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+        <span v-if="stationRecordsLotFilter" class="filter-tip">
+          当前仅展示批次「{{ stationRecordsLotFilter }}」的上料记录，清空可查看全部
+        </span>
+      </div>
+
       <!-- 记录列表 -->
-      <el-table v-loading="stationRecordsLoading" :data="stationRecordsList" border stripe max-height="420" style="margin-top: 16px">
+      <el-table v-loading="stationRecordsLoading" :data="filteredStationRecordsList" border stripe max-height="420" style="margin-top: 16px">
         <el-table-column label="物料批次条码" min-width="200" align="center" fixed="left">
           <template #default="{ row }">
             <el-link type="primary" :underline="false">
@@ -1886,21 +1907,22 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <el-table-column prop="Supplier" label="供应商" min-width="90" align="center" />
-        <el-table-column label="上料数量" width="100" align="center">
-          <template #default="{ row }">
-            <span style="font-weight: 700; color: var(--rtm-primary)">{{ row.ActualQuantity }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="校验状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.VerifyStatusTag" size="small" effect="light" round>{{ row.VerifyStatusText }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="OperatorName" label="操作人" min-width="80" align="center" />
-        <el-table-column prop="LoadingTime" label="上料时间" min-width="140" align="center" fixed="right" />
+        <el-table-column label="上料时间" min-width="160" align="center" fixed="right">
+          <template #default="{ row }">{{ formatDateTime(row.LoadingTime) || '-' }}</template>
+        </el-table-column>
       </el-table>
 
-      <el-empty v-if="!stationRecordsLoading && !stationRecordsList.length" description="该工站暂无上料记录" :image-size="80" />
+      <el-empty
+        v-if="!stationRecordsLoading && !filteredStationRecordsList.length"
+        :description="stationRecordsList.length ? '当前筛选条件下无上料记录，清空批次可查看全部' : '该工站暂无上料记录'"
+        :image-size="80"
+      />
 
       <template #footer>
         <el-button @click="stationRecordsDialogVisible = false">关闭</el-button>
@@ -2441,9 +2463,25 @@ onMounted(async () => {
   padding: 20px 24px;
 }
 
+.records-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.records-filter-bar .filter-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+.records-filter-bar .filter-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .records-summary-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 

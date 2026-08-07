@@ -53,35 +53,51 @@ export function updateMaterialLotStatus(id, status) {
 
 
 
-// 上料操作 - 物料批次条码下拉选项
-// 接口：GET /api/loading/material-lot-barcode-options
-// 用途：上料录入时的物料批次条码下拉选择（图3红框）
-// 后端过滤：Status='在库' 且 CurrentQuantity > 0
+// 物料批次条码下拉（辅助接口）
+// 接口：GET /api/material-lots/barcode-options
+// 用途：上料录入中「物料批次条码」下拉 / 扫码输入源数据
+// 后端已自动过滤：状态 = '在库' AND 当前数量 > 0
 // Query 参数：
-//   keyword string  可选，关键字模糊匹配：条码 / 物料编码 / 批次号
+//   keyword string  可选，关键字模糊匹配：条码 / 物料编码 / 批次号（如果前端一次性拉全部，可不传走本地过滤）
 // 返回 data = SmtMaterialLotBarcodeOptionVO[]：
 //   materialLotId   int64   物料批次ID
 //   barcode         string  条码
 //   materialCode    string  物料编码
-//   currentQuantity int32   剩余库存
-//   status          string  状态（应为"在库"）
+//   currentQuantity int32   剩余库存（> 0）
+//   status          string  状态（"在库"）
 export function getMaterialLotBarcodeOptions(params) {
-  return request.get('/loading/material-lot-barcode-options', { params })
+  return request.get('/material-lots/barcode-options', { params })
 }
 
-// 上料操作 - 查询上料工站列表
-// 接口：GET /api/loading/stations
-// 用途：上料操作 Tab 中「① 选择工站」步骤的工站卡片展示
-// 后端自动 JOIN 工序名 + 设备类型名
+// 上料操作 - 查询待上料批次列表
+// 接口：GET /api/loading/pending-lots
+// 用途：上料/下料管理「① 选择已投产批次」步骤的批次卡片展示
+// 筛选逻辑：批次状态=生产中(2) + 当前工序状态∈(待进站1/已进站2)，每批只取1行「当前工序」
 // 请求参数：无
+// 返回 data = PendingLotVO[]：
+//   id                      int64   批次ID（smt_lots.Id，调用 /api/loading/stations 的 lotId 参数）
+//   lotCode                 string  批次号
+//   productName             string  产品名称
+//   workOrderCode           string  工单号
+//   lineName                string  产线名称
+//   currentOperationName    string  当前工序名称
+export function getPendingLoadingLots() {
+  return request.get('/loading/pending-lots')
+}
+
+// 上料操作 - 查询上料工站列表（按批次查询工艺路线下所有工站）
+// 接口：GET /api/loading/stations
+// 用途：上料/下料管理「② 选择工站」步骤的工站卡片展示
+// Query 参数：
+//   lotId   int64  必填，批次ID（smt_lots.Id）；不传报错
 // 返回 data = 工站下拉选项VO[]：
 //   id                  int64   工站ID
 //   stationCode         string  工站编码
 //   stationName         string  工站名称
 //   operationName       string  工序名称
 //   equipmentTypeName   string  设备类型名称
-export function getLoadingStations() {
-  return request.get('/loading/stations')
+export function getLoadingStations(params) {
+  return request.get('/loading/stations', { params })
 }
 
 
@@ -116,14 +132,18 @@ export function getStationLoadingRecords(params) {
 // 上料操作 - 批量录入上料记录（单条录入时 records 长度 = 1）
 // 接口：POST /api/loading/records
 // 用途：点击「提交上料」时写入工站上料记录（单条录入即批量录入的退化形式）
-// 接口说明：每条单独校验；成功的 INSERT，失败的加入 failDetails，不整体回滚；
-//         LotId = NULL 表示未绑批次，VerifyStatus = 0 表示未校验，不落库，保留 remark。
+// 接口说明：每条单独校验；成功的 INSERT，失败的加入 failDetails，不整体回滚。
+//         建议先调 /api/loading/verify 拿校验结果，把 verifyStatus / verifyRemark 回填到每条 records 一起落库；
+//         不传则后端默认 verifyStatus=0（未校验）。
 // Body：
-//   stationId  int64                必填  工站ID (smt_stations.Id)
+//   lotId      int64                必填  批次ID (smt_lots.Id)，上料页「① 选择已投产批次」得到
+//   stationId  int64                必填  工站ID (smt_stations.Id)，上料页「② 选择工站」得到
 //   records    单条上料记录创建DTO[]  必填  上料记录列表（长度1即单条录入）
 //     records[].barcode         string  必填  物料批次条码 (smt_material_lots.Barcode)
 //     records[].loadedQuantity  int32   必填  上料数量（必须 > 0）
 //     records[].operatorId      int64   必填  操作人ID (smt_users.Id)
+//     records[].verifyStatus    int32   可选  校验结果：0-未校验 1-校验通过 2-校验失败（传 /api/loading/verify 返回的 verifyStatusCode）
+//     records[].verifyRemark    string  可选  校验结果说明（传 /api/loading/verify 返回的 message）
 // 返回 data = {
 //   successCount:  int32                 成功条数
 //   failCount:     int32                 失败条数

@@ -16,6 +16,10 @@ import {
   getStationHistory as getStationHistoryApi,
 } from '@/api/unloading'
 import {
+  getPendingLoadingLots,
+  getLoadingStations,
+} from '@/api/materialLot'
+import {
   users,
   UNLOAD_REASON,
   UNLOAD_REASON_TEXT,
@@ -25,8 +29,7 @@ import {
   getStationLoadingAndUnloadingHistory,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
-// TODO(backend): 后续补充「已投产批次列表」与「批次工站列表」接口后，
-// 用真实 API 替换下方 mock 数据（见 mockProducingBatches / mockBatchStationsMap）
+import { formatDateTime } from '@/utils/format'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -76,63 +79,25 @@ const selectedBatchId = ref(null)
 // ② 选中的工站（Tab1 下料操作）
 const selectedStationId = ref(null)
 
-// ---------- TODO(backend): 以下为模拟数据，待后端接口补充后替换 ----------
-const mockProducingBatches = [
-  {
-    id: 1001,
-    lotCode: 'B20260805001',
-    workOrderCode: 'WO20260805001',
-    productName: '智能控制板 V2.0',
-    lineName: 'SMT产线 A1',
-    currentOperation: '贴片',
-    status: 2,
-    plannedQuantity: 600,
-    completedQuantity: 120,
-  },
-  {
-    id: 1002,
-    lotCode: 'B20260805002',
-    workOrderCode: 'WO20260805002',
-    productName: '电源驱动板 V3.0',
-    lineName: 'SMT产线 A2',
-    currentOperation: '印刷',
-    status: 2,
-    plannedQuantity: 800,
-    completedQuantity: 0,
-  },
-  {
-    id: 1003,
-    lotCode: 'B20260805003',
-    workOrderCode: 'WO20260805003',
-    productName: '通信模块 V1.5',
-    lineName: 'SMT产线 A1',
-    currentOperation: '回流',
-    status: 2,
-    plannedQuantity: 1000,
-    completedQuantity: 560,
-  },
-]
-
-// 模拟「批次已上料工站列表」（按批次 id 索引）
-// 注意：下料的前提是工站已上料，因此这里只列出该批次【实际已上料】的工站
-//       （是工艺路线的子集），避免用户选到没有料可下的工站点空。
-// 后续接口候选：GET /api/loading/batch-loaded-stations?batchId={lotId}
-//   或复用 GET /api/loading/stations/records 按 batchId/lotId 聚合去重
-const mockBatchStationsMap = {
-  1001: [
-    { id: 201, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-    { id: 203, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
-  ],
-  1002: [
-    { id: 211, stationCode: 'ST-A2-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-  ],
-  1003: [
-    { id: 221, stationCode: 'ST-A1-01', stationName: '印刷工站', operationName: '印刷', equipmentTypeName: '印刷机', sequence: 10 },
-    { id: 222, stationCode: 'ST-A1-03', stationName: '贴片工站', operationName: '贴片', equipmentTypeName: '贴片机', sequence: 30 },
-    { id: 223, stationCode: 'ST-A1-04', stationName: '回流焊接工站', operationName: '回流焊接', equipmentTypeName: '回流炉', sequence: 40 },
-  ],
+// 归一化待上料批次字段：兼容后端返回的多种命名
+function normalizePendingLot(item) {
+  if (!item) return null
+  const id = item.id ?? item.Id ?? item.lotId ?? item.LotId
+  if (id == null) return null
+  return {
+    ...item,
+    id,
+    lotCode: item.lotCode ?? item.LotCode ?? '',
+    productName: item.productName ?? item.ProductName ?? '',
+    workOrderCode: item.workOrderCode ?? item.WorkOrderCode ?? '',
+    lineName: item.lineName ?? item.LineName ?? '',
+    currentOperation: item.currentOperation
+      ?? item.currentOperationName
+      ?? item.CurrentOperation
+      ?? item.CurrentOperationName
+      ?? '',
+  }
 }
-// ---------- 模拟数据结束 ----------
 
 // 批次列表（Tab1 与 Tab2 共享）
 const batchList = ref([])
@@ -172,16 +137,34 @@ function normalizeLoadingStation(item, index) {
   }
 }
 
-// 加载已投产批次列表
-// TODO(backend): 替换为真实接口（候选 GET /api/lots/pending-loading/list 或 GET /api/lots?status=2）
+// 从响应体中取出数组 payload（兼容多种包装结构）
+function extractListPayload(data) {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    const arr = data.list
+      || data.content
+      || data.records
+      || data.rows
+      || data.items
+      || data.data
+      || (Array.isArray(data.Data) ? data.Data : null)
+    if (Array.isArray(arr)) return arr
+  }
+  return []
+}
+
+// ① 加载已投产（待上料）批次列表（真实 API：GET /api/loading/pending-lots）
 async function loadBatchList() {
   batchListLoading.value = true
   try {
-    await new Promise((r) => setTimeout(r, 150))
-    batchList.value = mockProducingBatches.map((b) => ({ ...b }))
-    console.log('[Unloading] 已投产批次列表（mock）：', batchList.value.length, '条')
+    console.log('[Unloading] GET /api/loading/pending-lots')
+    const data = await getPendingLoadingLots()
+    console.log('[Unloading] 待上料批次列表原始返回：', data)
+    const list = extractListPayload(data).map(normalizePendingLot).filter(Boolean)
+    batchList.value = list
+    console.log('[Unloading] 待上料批次列表解析后条数：', list.length)
   } catch (error) {
-    console.warn('[Unloading] 已投产批次列表加载失败：', error)
+    console.warn('[Unloading] 待上料批次列表接口失败：', error)
     batchList.value = []
     ElMessage.warning('已投产批次列表接口暂不可用，请稍后重试')
   } finally {
@@ -189,8 +172,8 @@ async function loadBatchList() {
   }
 }
 
-// 按批次 id 加载【已上料】工站列表（Tab1 下料用，只含已上料工站，避免选空）
-// TODO(backend): 替换为真实接口（候选 GET /api/loading/batch-loaded-stations?batchId={lotId}）
+// 按批次 id 加载该批次工艺路线下的工站列表（真实 API：GET /api/loading/stations?lotId=xxx）
+// 注：目前下料步骤②同样展示该批次下全部工站，具体「已上料/可下料」的判断由后续「待下料记录」接口过滤即可
 async function loadBatchStations(batchId) {
   if (!batchId) {
     batchStations.value = []
@@ -198,21 +181,23 @@ async function loadBatchStations(batchId) {
   }
   batchStationsLoading.value = true
   try {
-    await new Promise((r) => setTimeout(r, 120))
-    const raw = mockBatchStationsMap[batchId] || []
-    const list = raw.map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
+    const params = { lotId: Number(batchId) }
+    console.log('[Unloading] GET /api/loading/stations（下料Tab1）参数：', params)
+    const data = await getLoadingStations(params)
+    console.log('[Unloading] 批次工站列表（下料Tab1）原始返回：', data)
+    const list = extractListPayload(data).map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
     list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
     batchStations.value = list
   } catch (error) {
-    console.warn('[Unloading] 批次工站列表加载失败：', error)
+    console.warn('[Unloading] 批次工站列表（下料Tab1）接口失败：', error)
     batchStations.value = []
-    ElMessage.warning('批次工站列表接口暂不可用，请稍后重试')
+    ElMessage.warning('工站列表接口暂不可用，请稍后重试')
   } finally {
     batchStationsLoading.value = false
   }
 }
 
-// 按批次 id 加载【已上料】工站列表（Tab2 历史记录用，独立缓存，只含已上料工站）
+// Tab2 历史记录：独立加载批次工站列表（真实 API 同源）
 async function loadHistoryBatchStations(batchId) {
   if (!batchId) {
     historyBatchStations.value = []
@@ -220,13 +205,15 @@ async function loadHistoryBatchStations(batchId) {
   }
   historyBatchStationsLoading.value = true
   try {
-    await new Promise((r) => setTimeout(r, 120))
-    const raw = mockBatchStationsMap[batchId] || []
-    const list = raw.map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
+    const params = { lotId: Number(batchId) }
+    console.log('[Unloading] GET /api/loading/stations（历史Tab）参数：', params)
+    const data = await getLoadingStations(params)
+    console.log('[Unloading] 批次工站列表（历史Tab）原始返回：', data)
+    const list = extractListPayload(data).map((item, i) => normalizeLoadingStation(item, i)).filter(Boolean)
     list.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
     historyBatchStations.value = list
   } catch (error) {
-    console.warn('[Unloading] 历史批次工站列表加载失败：', error)
+    console.warn('[Unloading] 历史批次工站列表接口失败：', error)
     historyBatchStations.value = []
   } finally {
     historyBatchStationsLoading.value = false
@@ -717,7 +704,9 @@ onMounted(async () => {
                 </template>
               </el-table-column>
               <el-table-column prop="OperatorName" label="操作人" min-width="80" align="center" />
-              <el-table-column prop="LoadingTime" label="上料时间" min-width="140" align="center" />
+              <el-table-column label="上料时间" min-width="160" align="center">
+                <template #default="{ row }">{{ formatDateTime(row.LoadingTime) || '-' }}</template>
+              </el-table-column>
             </el-table>
           </div>
 
@@ -982,7 +971,9 @@ onMounted(async () => {
               </template>
             </el-table-column>
             <el-table-column prop="OperatorName" label="操作人" min-width="80" align="center" />
-            <el-table-column prop="OperationTime" label="操作时间" min-width="140" align="center" fixed="right" />
+            <el-table-column label="操作时间" min-width="160" align="center" fixed="right">
+              <template #default="{ row }">{{ formatDateTime(row.OperationTime) || '-' }}</template>
+            </el-table-column>
           </el-table>
 
           <el-empty

@@ -1,12 +1,11 @@
 import request from '@/utils/request'
 
-// 获取物料下拉可选列表
+// 物料编码可选列表（下拉）
 // 接口：GET /api/materials/options
-// 用途：新建物料批次、上料时的物料编码下拉选择
+// 用途：新建物料批次 / 上料时「物料编码」下拉选择
+// 后端筛选：所有未删除的物料编码
 // Query 参数：
-//   keyword  string  关键字，模糊匹配物料编码或物料名称
-//   pageSize number  每页条数（拉取下拉建议传较大值如 1000）
+//   keyword  string  可选，关键字，模糊匹配物料编码或物料名称
 export function getMaterialOptions(params) {
-  const query = { pageSize: 1000, ...(params || {}) }
-  return request.get('/materials/options', { params: query })
+  return request.get('/materials/options', { params })
 }
