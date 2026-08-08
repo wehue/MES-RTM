@@ -38,6 +38,9 @@ request.interceptors.response.use(
     // 后端未采用 { code, message, data } 标准包装时，直接返回 body 本身
     // （如分页接口直接返回 { pageNum, pageSize, total, list } 或数组）
     if (!('code' in body) && !('Code' in body)) return body
+    // _fullResponse：调用方需要完整响应体（含 code/message）自行判断业务结果时使用
+    // 用于后端用非 200 的 2xx（如 202 PARAM_ERROR）承载业务结果且前端需读取 message 的场景
+    if (response.config._fullResponse) return body
     const { code, data, message } = body
     if (code === 200 || code === 0 || (code >= 200 && code < 300)) {
       return data

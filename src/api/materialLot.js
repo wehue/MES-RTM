@@ -38,7 +38,9 @@ export function getMaterialLots(params) {
 // 后端自动生成：批次号（yyyyMMdd+4 位流水号）、条码（物料编码#批次号）
 // 返回：包含后端生成的 id/batchNo/barcode
 export function createMaterialLot(data) {
-  return request.post('/material-lots', data)
+  // _fullResponse：后端对日期校验等失败返回 code=202(PARAM_ERROR) + message，
+  // 需拿到完整响应体自行判断成功/失败并展示后端的具体错误消息
+  return request.post('/material-lots', data, { _fullResponse: true })
 }
 
 // 更新物料批次状态

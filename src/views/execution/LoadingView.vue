@@ -190,6 +190,9 @@ function remainingQuantity(row) {
 }
 
 function isExpired(row) {
+  // 优先使用后端返回的 expired 字段（后端按 当天日期 > 有效期 计算）
+  if (typeof row.Expired === 'boolean') return row.Expired
+  // 降级：后端未返回时前端自行计算（兼容旧数据/mock）
   if (!row.ExpiryDate) return false
   return new Date(row.ExpiryDate) < new Date()
 }
@@ -268,6 +271,7 @@ function normalizeMaterialLot(item) {
     InboundDate: item.InboundDate ?? item.inboundDate,
     Status: item.Status ?? item.status,
     Barcode: item.Barcode ?? item.barcode,
+    Expired: item.Expired ?? item.expired ?? null,
   }
 }
 
@@ -407,8 +411,17 @@ async function submitCreateLot() {
       mslLevel: createForm.MslLevel != null && createForm.MslLevel !== '' ? Number(createForm.MslLevel) : undefined,
     }
     console.log('[Loading] POST /api/material-lots 请求参数：', payload)
-    const data = await createMaterialLotApi(payload)
-    console.log('[Loading] POST /api/material-lots 返回数据：', data)
+    // createMaterialLot 走 _fullResponse，返回完整响应体 { code, message, data }
+    const body = await createMaterialLotApi(payload)
+    console.log('[Loading] POST /api/material-lots 返回数据：', body)
+    // 后端对三个日期校验失败返回 code=202(PARAM_ERROR) + 具体消息，直接展示给用户，不再由前端校验
+    const respCode = body?.code ?? body?.Code
+    const respMsg = body?.message ?? body?.Message
+    if (respCode !== 200 && respCode !== 0) {
+      ElMessage.error(respMsg || '物料批次创建失败')
+      return
+    }
+    const data = body?.data
     if (!data) {
       console.warn('[Loading] ⚠️ 后端返回 data 为空，可能未实际保存。请检查后端 POST 接口是否写入了数据库。')
     }
@@ -425,11 +438,11 @@ async function submitCreateLot() {
       : null
     createdLotInfo.value = normalized
     const batchNo = normalized?.BatchNo ?? normalized?.batchNo ?? ''
-    const barcode = normalized?.Barcode ?? normalized?.barcode ?? ''
     const successTip = batchNo
       ? `（批次号：${batchNo}）`
       : (createForm.MaterialCode ? `（物料：${createForm.MaterialCode}）` : '')
-    ElMessage.success(`物料批次创建成功${successTip}`)
+    // 后端成功 message 形如 "新建成功，物料批次条码：xxx"，有则优先展示
+    ElMessage.success(respMsg || `物料批次创建成功${successTip}`)
     // 创建成功后关闭对话框，回到第 1 页并刷新列表
     createDialogVisible.value = false
     resetCreateForm()
@@ -1408,7 +1421,7 @@ onMounted(async () => {
             <el-table-column label="生产日期" min-width="110" align="center">
               <template #default="{ row }">{{ _fmtDate(row.ProductionDate) || '-' }}</template>
             </el-table-column>
-            <el-table-column label="有效期" min-width="120" align="center">
+            <el-table-column label="有效期" min-width="150" align="center">
               <template #default="{ row }">
                 <span v-if="!row.ExpiryDate" style="color: var(--rtm-text-muted)">-</span>
                 <template v-else>
