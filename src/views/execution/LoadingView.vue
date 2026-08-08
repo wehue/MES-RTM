@@ -1421,6 +1421,9 @@ onMounted(async () => {
             <el-table-column label="生产日期" min-width="110" align="center">
               <template #default="{ row }">{{ _fmtDate(row.ProductionDate) || '-' }}</template>
             </el-table-column>
+            <el-table-column label="入库日期" min-width="160" align="center">
+              <template #default="{ row }">{{ formatDateTime(row.InboundDate) || '-' }}</template>
+            </el-table-column>
             <el-table-column label="有效期" min-width="150" align="center">
               <template #default="{ row }">
                 <span v-if="!row.ExpiryDate" style="color: var(--rtm-text-muted)">-</span>
@@ -1429,9 +1432,6 @@ onMounted(async () => {
                   <el-tag v-if="isExpired(row)" type="danger" size="small" effect="dark" style="margin-left: 4px">过期</el-tag>
                 </template>
               </template>
-            </el-table-column>
-            <el-table-column label="入库日期" min-width="160" align="center">
-              <template #default="{ row }">{{ formatDateTime(row.InboundDate) || '-' }}</template>
             </el-table-column>
             <el-table-column prop="MslLevel" label="MSL" width="70" align="center">
               <template #default="{ row }">
@@ -2114,9 +2114,15 @@ onMounted(async () => {
   color: var(--rtm-text);
   flex: 1 1 auto;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* 批次卡片（batch-card）里的批次号允许换行显示完整内容，不要省略号 */
+.batch-card .station-code {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .operation-tag {
