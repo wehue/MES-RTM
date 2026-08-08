@@ -1788,10 +1788,6 @@ onMounted(async () => {
                 :disabled="!m.value"
               />
             </el-select>
-            <div v-if="selectedMaterialInfo" class="material-ref-info">
-              <el-icon style="margin-right: 4px"><InfoFilled /></el-icon>
-              封装类型：{{ selectedMaterialInfo.PackageType }} | 品牌：{{ selectedMaterialInfo.Brand }}
-            </div>
           </el-form-item>
           <el-form-item label="入库数量" required>
             <el-input-number v-model="createForm.Quantity" :min="1" style="width: 100%" placeholder="入库数量" />
