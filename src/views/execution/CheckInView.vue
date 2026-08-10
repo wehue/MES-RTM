@@ -239,7 +239,6 @@ const currentStationEquipment = computed(() => {
   if (!currentStation.value) return null
   return getStationEquipment(currentStation.value.Id)
 })
-const equipmentBoundReady = computed(() => Boolean(currentStationEquipment.value))
 // BOM 齐套校验（完全依赖后端 /api/lots/station-in/detail 返回的 verifyFailedTotalQuantity：
 //  - 0        → 当前工序 BOM 物料全部校验通过
 //  - >0       → 当前工序仍有 N 个物料未上料/校验失败
@@ -252,7 +251,7 @@ const loadingValidation = computed(() => {
   if (Number(failedQty) <= 0) return { pass: true, type: 'success', message: '当前工序 BOM 物料校验通过，满足进站条件。' }
   return { pass: false, type: 'warning', message: `BOM 物料未齐套，当前工序仍有 ${Number(failedQty)} 个物料校验失败，请先到上料管理补齐物料。` }
 })
-const canSubmit = computed(() => Boolean(currentBatch.value && equipmentBoundReady.value && processCompliance.value.pass && loadingValidation.value.pass))
+const canSubmit = computed(() => Boolean(currentBatch.value && processCompliance.value.pass && loadingValidation.value.pass))
 
 watch(() => form.LotCode, (lotCode) => {
   loadStationInDetail(lotCode)
@@ -275,10 +274,6 @@ async function submit() {
   if (!canSubmit.value) {
     if (!processCompliance.value.pass) {
       ElMessage.error(processCompliance.value.message)
-      return
-    }
-    if (!equipmentBoundReady.value) {
-      ElMessage.error('当前工站未绑定设备，请联系管理员维护工站-设备关系')
       return
     }
     if (!loadingValidation.value.pass) {
@@ -389,6 +384,7 @@ async function submit() {
                 </span>
                 <span v-else>-</span>
               </el-descriptions-item>
+              <el-descriptions-item label="设备类型">{{ currentStationEquipment?.EquipmentTypeName || stationInDetail?.equipmentTypeName || '-' }}</el-descriptions-item>
               <el-descriptions-item label="上一工序">{{ previousStepLabel }}</el-descriptions-item>
               <el-descriptions-item label="批次状态">
                 <StatusTag v-if="stationInDetail?.lotStatus" :meta="statusMeta(BATCH_STATUS, stationInDetail.lotStatus)" />
@@ -406,13 +402,6 @@ async function submit() {
           <el-alert :title="processCompliance.message" :type="processCompliance.type" show-icon :closable="false" />
           <el-alert
             style="margin-top: 10px"
-            :title="equipmentBoundReady ? `工站已绑定设备：${currentStationEquipment?.EquipmentCode || ''} / ${currentStationEquipment?.EquipmentName || '-'}` : '当前工站未绑定设备，无法进站，请联系管理员维护工站-设备关系。'"
-            :type="equipmentBoundReady ? 'success' : 'error'"
-            show-icon
-            :closable="false"
-          />
-          <el-alert
-            style="margin-top: 10px"
             :title="loadingValidation.message"
             :type="loadingValidation.type"
             show-icon
@@ -420,17 +409,6 @@ async function submit() {
           />
 
           <el-form :model="form" label-width="106px" class="operation-form">
-            <el-form-item label="工站">
-              <el-input :model-value="currentStation?.StationName || '-'" readonly>
-                <template v-if="currentStation?.StationCode" #append>{{ currentStation.StationCode }}</template>
-              </el-input>
-            </el-form-item>
-            <el-form-item label="绑定设备">
-              <el-input
-                :model-value="currentStationEquipment ? `${currentStationEquipment.EquipmentCode || ''} / ${currentStationEquipment.EquipmentName || '-'}` : '当前工站未绑定设备'"
-                readonly
-              />
-            </el-form-item>
             <el-form-item label="进站数量">
               <el-input-number v-model="form.StationInQuantity" :min="1" :max="stationInDetail?.plannedQuantity || 1" />
             </el-form-item>
