@@ -29,18 +29,40 @@ export function getBatchDetail(id) {
   return request.get('/lots/detail', { params: { id } })
 }
 
-// 获取待进站批次列表（进站操作用）
-// 接口：GET /api/lots/station-in/list
-// 用途：进站操作页面左侧列表，展示所有状态为生产中且当前工序待进站的批次
-export function getStationInList() {
-  return request.get('/lots/station-in/list')
+// 获取待进站批次列表（进站操作用，分页）
+// 接口：GET /api/station-in/list
+// 用途：进站操作页面"待进站批次列表"表格，后端筛选：
+//        ① 无任何已进站(Status=2)的工序
+//        ② 至少有一道待进站(Status=1)的工序
+//        ③ 批次状态 IN (1-待生产, 2-生产中)
+//        ④ 排序：创建时间 DESC
+// Query 参数：
+//   pageNum  int  可选，页码（从 1 开始，默认 1）
+//   pageSize int  可选，每页大小（默认 20）
+// 返回 data：{ pageNum, pageSize, total, totalPages, list: [{lotId, lotCode, productCode, productName,
+//           lineName, plannedQuantity, completedQuantity, pendingStationInQuantity,
+//           currentPendingOperationName, lotStatusName, createdAt}] }
+export function getStationInList(params) {
+  return request.get('/station-in/list', { params })
 }
 
-// 按批次号查询进站详情
-// 接口：GET /api/lots/station-in/detail
-// 用途：进站操作页面右侧详情，展示当前工序、上一工序、待进站数量等信息
+// 按批次号查询进站批次基础资料（含 BOM 校验）
+// 接口：GET /api/station-in/detail
+// 用途：进站操作页面「批次选择与基础信息」展示，以及 BOM 封装匹配校验
+// Query 参数：
+//   lotCode  string  必填，批次号（接口1列表返回的 lotCode）
+// 返回 data（进站批次基本资料VO）：
+//   基础信息：lotId, lotCode, productId, productCode, productName, lineId, lineName,
+//             plannedQuantity, completedQuantity, pendingStationInQuantity,
+//             currentPendingRouteStepId, currentPendingOperationName,
+//             currentPendingStationId, currentPendingStationName,
+//             lotStatusName, createdAt
+//   BOM 校验：bomVerifyPassed (bool), bomVerifyMessage (中文说明),
+//             bomPackages[] (packageCode/packageName),
+//             supportedPackages[] (packageCode/packageName),
+//             mismatchedPackages[] (packageCode/packageName, 失败时的差集)
 export function getStationInDetail(lotCode) {
-  return request.get('/lots/station-in/detail', { params: { lotCode } })
+  return request.get('/station-in/detail', { params: { lotCode } })
 }
 
 // 获取可出站批次列表（出站操作用）
@@ -80,15 +102,22 @@ export function createBatch(data) {
   return request.post('/lots', data)
 }
 
-// 执行进站
-// 接口：POST /api/station-in
-// 用途：进站操作页面提交“执行进站”；后端会自动识别当前工序、写入进站记录，
-//      首道工序进站时会把批次状态改为“生产中”
-// 参数：{ lotId, operatorId, stationInQuantity, remark }
-// 说明：工站与设备为一对一关系，进站设备由后端根据当前工站自动识别，
-//      前端无需再传递 equipmentId
+// 确认进站操作
+// 接口：POST /api/station-in/confirm
+// 用途：进站操作页面提交"确认进站"；事务内只写 2 张表：
+//        ① UPDATE 工序状态 Status=1→2，写入进站时间/进站数量
+//        ② INSERT 进站历史流水
+//      前置校验：批次/工序状态、进站数量 ≤ 待进站数量、BOM 必须通过、设备工站操作员均存在
+//      CreatedBy/UpdatedBy 后端由 Token 解析的决策人填充；前端传的 operatorId = 具体干活的人（主管指定）
+// Body 参数（必填，缺一不可）：
+//   lotId                int64  批次ID（接口1/2返回的 lotId）
+//   operatorId           int64  进站操作员ID（谁具体干活，不是 Token 决策人）
+//   stationInQuantity    int32  进站数量（>0 且 ≤ 接口2返回的 pendingStationInQuantity）
+// 返回 data（进站确认结果VO）：
+//   lotId, lotCode, routeStepId, operationName, stationName, equipmentId,
+//   stationInTime, stationInQuantity, round（第N次进这道工序）
 export function createStationIn(data) {
-  return request.post('/station-in', data)
+  return request.post('/station-in/confirm', data)
 }
 
 // 执行上料/补料

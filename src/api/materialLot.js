@@ -17,8 +17,9 @@ import request from '@/utils/request'
 //   pageSize       integer 每页大小，默认 20
 // 返回 list 中每条 VO 字段：
 //   id / materialCode / batchNo / supplier / supplierBatchNo
-//   inboundQuantity(入库数) / currentQuantity(剩余数) / usedQuantity(已用数)
+//   inboundQuantity(入库数) / currentQuantity(当前数) / usedQuantity(已用数)
 //   productionDate / expiryDate / mslLevel / inboundDate / status / barcode
+//   packageCode（封装编码）
 export function getMaterialLots(params) {
   return request.get('/material-lots', { params })
 }

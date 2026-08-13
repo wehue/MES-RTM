@@ -64,12 +64,14 @@ function normalizeMaterial(m) {
   const desc = m.MaterialDesc ?? m.materialName ?? m.materialDesc ?? m.MaterialName ?? m.Desc ?? m.desc ?? m.Name ?? m.name ?? m.material_name ?? ''
   // 兼容 PackageType（字符串名称）和 PackageTypeId（数字关联 ID）
   const packageType = m.PackageType ?? m.packageType ?? m.PackageTypeName ?? m.packageTypeName ?? m.PackageTypeId ?? m.packageTypeId
+  const packageCode = m.PackageCode ?? m.packageCode ?? ''
   const brand = m.Brand ?? m.brand ?? m.BrandName ?? m.brandName ?? ''
   return {
     ...m,
     MaterialCode: code,
     MaterialDesc: desc,
     PackageType: typeof packageType === 'number' ? `类型${packageType}` : packageType,
+    PackageCode: packageCode,
     Brand: brand,
     __label: code ? (desc ? `${code} (${desc})` : code) : '',
   }
@@ -120,6 +122,7 @@ async function loadMaterialOptions(keyword) {
         value: String(m.MaterialCode),
         label: String(m.__label || m.MaterialCode || ''),
         PackageType: m.PackageType,
+        PackageCode: m.PackageCode,
         Brand: m.Brand,
       }))
       // 仅过滤掉 value/label 为 null/undefined/空字符串 的选项，避免过滤过严导致下拉全空
@@ -144,6 +147,7 @@ async function loadMaterialOptions(keyword) {
           value: String(m.MaterialCode),
           label: String(m.__label || m.MaterialCode || ''),
           PackageType: m.PackageType,
+          PackageCode: m.PackageCode,
           Brand: m.Brand,
         }))
         .filter((o) =>
@@ -271,6 +275,7 @@ function normalizeMaterialLot(item) {
     InboundDate: item.InboundDate ?? item.inboundDate,
     Status: item.Status ?? item.status,
     Barcode: item.Barcode ?? item.barcode,
+    PackageCode: item.PackageCode ?? item.packageCode ?? '',
     Expired: item.Expired ?? item.expired ?? null,
   }
 }
@@ -703,6 +708,7 @@ function normalizeBarcodeOption(item) {
   const materialLotId = item.materialLotId ?? item.MaterialLotId ?? item.id ?? item.Id
   const barcode = item.barcode ?? item.Barcode
   const materialCode = item.materialCode ?? item.MaterialCode
+  const packageCode = item.packageCode ?? item.PackageCode ?? ''
   const currentQuantity = item.currentQuantity
     ?? item.CurrentQuantity
     ?? item.RemainingQuantity
@@ -713,6 +719,7 @@ function normalizeBarcodeOption(item) {
     materialLotId,
     barcode,
     materialCode,
+    packageCode,
     currentQuantity,
     status,
     __value: barcode,
@@ -753,6 +760,7 @@ async function loadBarcodeOptions() {
         value: String(o.__value || ''),
         label: String(o.__label || o.__value || ''),
         materialCode: o.materialCode,
+        packageCode: o.packageCode,
         currentQuantity: o.currentQuantity,
       }))
       .filter((o) =>
@@ -1322,7 +1330,18 @@ onMounted(async () => {
                     :label="String(m.label || m.value || '')"
                     :value="m.value"
                     :disabled="!m.value"
-                  />
+                  >
+                    <div class="material-option">
+                      <span class="material-option__main">{{ m.label || m.value }}</span>
+                      <el-tag
+                        v-if="m.PackageCode"
+                        size="small"
+                        effect="plain"
+                        type="info"
+                        class="material-option__pkg"
+                      >{{ m.PackageCode }}</el-tag>
+                    </div>
+                  </el-option>
                 </el-select>
               </el-form-item>
               <el-form-item label="状态">
@@ -1405,12 +1424,15 @@ onMounted(async () => {
               </template>
             </el-table-column>
             <el-table-column prop="MaterialCode" label="物料编码" min-width="120" align="center" />
+            <el-table-column prop="PackageCode" label="封装类型" width="90" align="center">
+              <template #default="{ row }">{{ row.PackageCode || '-' }}</template>
+            </el-table-column>
             <el-table-column prop="BatchNo" label="批次号" min-width="140" align="center" />
             <el-table-column prop="Supplier" label="供应商" min-width="90" align="center" />
             <el-table-column prop="SupplierBatchNo" label="供应商批次号" min-width="130" align="center">
               <template #default="{ row }">{{ row.SupplierBatchNo || '-' }}</template>
             </el-table-column>
-            <el-table-column label="库存（总/已用/剩余）" min-width="170" align="center">
+            <el-table-column label="库存（总/已用/当前）" min-width="170" align="center">
               <template #default="{ row }">
                 <span class="qty-display">
                   {{ row.Quantity }} / {{ row.UsedQuantity }} /
@@ -1641,7 +1663,18 @@ onMounted(async () => {
                       :label="opt.label"
                       :value="opt.value"
                       :disabled="!opt.value"
-                    />
+                    >
+                      <div class="material-option">
+                        <span class="material-option__main">{{ opt.label }}</span>
+                        <el-tag
+                          v-if="opt.packageCode"
+                          size="small"
+                          effect="plain"
+                          type="info"
+                          class="material-option__pkg"
+                        >{{ opt.packageCode }}</el-tag>
+                      </div>
+                    </el-option>
                   </el-select>
                   <el-input
                     v-show="row.inputMode !== 'select'"
@@ -1786,7 +1819,18 @@ onMounted(async () => {
                 :label="String(m.label || m.value || '')"
                 :value="m.value"
                 :disabled="!m.value"
-              />
+              >
+                <div class="material-option">
+                  <span class="material-option__main">{{ m.label || m.value }}</span>
+                  <el-tag
+                    v-if="m.PackageCode"
+                    size="small"
+                    effect="plain"
+                    type="info"
+                    class="material-option__pkg"
+                  >{{ m.PackageCode }}</el-tag>
+                </div>
+              </el-option>
             </el-select>
           </el-form-item>
           <el-form-item label="入库数量" required>
@@ -1941,6 +1985,23 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.material-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.material-option__main {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.material-option__pkg {
+  flex-shrink: 0;
+}
+
 .loading-tabs :deep(.el-tabs__header) {
   margin-bottom: 16px;
 }
