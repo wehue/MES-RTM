@@ -19,15 +19,7 @@ import {
   getPendingLoadingLots,
   getLoadingStations,
 } from '@/api/materialLot'
-import {
-  users,
-  UNLOAD_REASON,
-  UNLOAD_REASON_TEXT,
-  getStationUnloadableRecords,
-  getUnloadableQuantity,
-  addUnloadingRecord,
-  getStationLoadingAndUnloadingHistory,
-} from '@/utils/mockData'
+import { UNLOAD_REASON } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { formatDateTime } from '@/utils/format'
 
@@ -40,28 +32,14 @@ const activeTab = ref('unloading')
 // ==================== 操作人列表 ====================
 const operatorList = ref([])
 
-function buildMockOperatorList() {
-  return users.map((u) => ({
-    id: u.Id,
-    Id: u.Id,
-    username: u.Username,
-    Username: u.Username,
-    fullName: u.FullName,
-    FullName: u.FullName,
-    position: u.Position,
-    Position: u.Position,
-    department: u.Department,
-    Department: u.Department,
-  }))
-}
-
 async function loadOperatorList() {
   try {
     const data = await getOperators()
     operatorList.value = Array.isArray(data) ? data : []
   } catch (error) {
-    console.warn('[Unloading] API 获取操作人列表失败，使用 Mock 数据：', error)
-    operatorList.value = buildMockOperatorList()
+    console.warn('[Unloading] 操作人列表接口失败：', error)
+    operatorList.value = []
+    ElMessage.warning('操作人列表接口暂不可用，请稍后重试')
   }
 }
 
@@ -278,8 +256,9 @@ async function loadUnloadableList() {
     const data = await getStationUnloadableRecordsApi(params)
     unloadableList.value = Array.isArray(data) ? data : (data?.records || data?.list || [])
   } catch (error) {
-    console.warn('[Unloading] API 获取工站可下料记录失败，使用 Mock 数据：', error)
-    unloadableList.value = getStationUnloadableRecords(currentStation.value.routeStepId)
+    console.warn('[Unloading] 工站可下料记录接口失败：', error)
+    unloadableList.value = []
+    ElMessage.warning('可下料记录接口暂不可用，请稍后重试')
   } finally {
     unloadableLoading.value = false
   }
@@ -389,14 +368,8 @@ async function submitUnloading() {
       await createUnloading(payload)
       successCount++
     } catch (error) {
-      console.warn('[Unloading] API 下料提交失败，使用 Mock 模拟：', error)
-      const result = addUnloadingRecord(payload)
-      if (result.ok) {
-        successCount++
-      } else {
-        failCount++
-        ElMessage.error(result.message || '下料失败')
-      }
+      failCount++
+      ElMessage.error(error?.message || '下料失败')
     }
   }
 
@@ -429,8 +402,9 @@ async function loadHistory() {
     const data = await getStationHistoryApi(params)
     historyList.value = Array.isArray(data) ? data : (data?.records || data?.list || [])
   } catch (error) {
-    console.warn('[Unloading] API 获取工站上下料历史失败，使用 Mock 数据：', error)
-    historyList.value = getStationLoadingAndUnloadingHistory(historyStation.value.routeStepId)
+    console.warn('[Unloading] 工站上下料历史接口失败：', error)
+    historyList.value = []
+    ElMessage.warning('上下料历史接口暂不可用，请稍后重试')
   } finally {
     historyLoading.value = false
   }

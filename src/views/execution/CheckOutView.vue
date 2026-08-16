@@ -8,17 +8,8 @@ import { BATCH_STATUS, statusMeta } from '@/utils/constants'
 import {
   BATCH_STATUS_CODE,
   DISPOSAL_TYPE_CODE,
-  batches,
-  batchExecutionState,
-  findStation,
-  getBatchCurrentStation,
-  getBatchDefectQuantity,
-  getBatchScrapQuantity,
-  getCurrentOperationName,
   getInspectionThreshold,
-  getStationEquipment,
   isInspectionProcess,
-  getUserDisplayName,
 } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { getStationOutList, getStationOutDetail, createStationOut } from '@/api/batch'
@@ -135,55 +126,33 @@ const currentBatch = computed(() => {
   return stationOutList.value.find(item => item.lotCode === form.LotCode) || null
 })
 
-const mockBatch = computed(() => batches.find(item => item.LotCode === form.LotCode) || null)
-
 const canForce = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
 const isLocked = computed(() => stationOutDetail.value?.lotStatus === BATCH_STATUS_CODE.locked)
-const currentInQty = computed(() => {
-  if (stationOutDetail.value?.stationInQuantity) {
-    return stationOutDetail.value.stationInQuantity
-  }
-  if (mockBatch.value) {
-    return batchExecutionState[mockBatch.value.LotCode]?.CurrentInQuantity || 
-           mockBatch.value.CompletedQuantity + getBatchDefectQuantity(mockBatch.value) + getBatchScrapQuantity(mockBatch.value)
-  }
-  return 0
-})
-const currentOperationName = computed(() => stationOutDetail.value?.currentOperation || (mockBatch.value ? getCurrentOperationName(mockBatch.value) : '-'))
-// 当前工序对应的工站（与工序、设备均为一对一关系）
-// 优先使用后端 station-out/detail 返回的 stationId/stationName；
-// 后端未返回时，按 mock 批次当前工序查找工站
+const currentInQty = computed(() => Number(stationOutDetail.value?.stationInQuantity) || 0)
+const currentOperationName = computed(() => stationOutDetail.value?.currentOperation || '-')
 const currentStation = computed(() => {
   const detail = stationOutDetail.value
   if (!detail) return null
-  // 后端直返字段优先
-  const remoteStationId = detail.stationId || detail.StationId
-  if (remoteStationId) {
-    const station = findStation(remoteStationId)
-    if (station) return station
-  }
-  if (detail.stationName) {
-    return { StationName: detail.stationName, StationCode: detail.stationCode || '', EquipmentId: detail.equipmentId }
-  }
-  // mock 兜底
-  if (mockBatch.value) {
-    return getBatchCurrentStation(mockBatch.value)
+  if (detail.stationId || detail.StationId || detail.stationName) {
+    return {
+      Id: detail.stationId || detail.StationId,
+      StationName: detail.stationName || '-',
+      StationCode: detail.stationCode || '',
+      EquipmentId: detail.equipmentId,
+    }
   }
   return null
 })
 const currentStationEquipment = computed(() => {
-  // 优先使用后端返回的设备信息
   const detail = stationOutDetail.value
-  if (detail?.equipmentCode || detail?.equipmentName) {
+  if (detail?.equipmentCode || detail?.equipmentName || detail?.equipmentTypeName) {
     return {
       EquipmentCode: detail.equipmentCode || '',
       EquipmentName: detail.equipmentName || '-',
       EquipmentTypeName: detail.equipmentTypeName || '',
     }
   }
-  // mock 兜底
-  if (!currentStation.value) return null
-  return getStationEquipment(currentStation.value.Id)
+  return null
 })
 const isInspection = computed(() => currentOperationName.value ? isInspectionProcess(currentOperationName.value) : false)
 const inspectionThreshold = computed(() => currentOperationName.value ? getInspectionThreshold(currentOperationName.value) : 0)
@@ -272,7 +241,7 @@ async function submit() {
     return
   }
 
-  const lotId = currentBatch.value?.lotId || stationOutDetail.value?.lotId || (mockBatch.value?.Id || 0)
+  const lotId = currentBatch.value?.lotId || stationOutDetail.value?.lotId || 0
 
   const submitData = {
     lotId: Number(lotId),

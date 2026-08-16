@@ -5,21 +5,6 @@ import { ElMessage } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { BATCH_STATUS, PROCESS_STATUS, statusMeta } from '@/utils/constants'
-import {
-  BATCH_STATUS_CODE,
-  PROCESS_STATUS_CODE,
-  batches,
-  findStation,
-  findStationByLineOperation,
-  getBatchLine,
-  getBatchPendingQty,
-  getBatchWorkOrder,
-  getBatchCurrentStation,
-  getCurrentOperationName,
-  getCurrentProcess,
-  getRouteStepRows,
-  getStationEquipment,
-} from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { getStationInList, getStationInDetail, createStationIn } from '@/api/batch'
 import { getOperators } from '@/api/user'
@@ -38,7 +23,6 @@ const form = reactive({
   LotCode: String(route.query.LotCode || route.query.batchId || ''),
   StationInQuantity: 800,
   OperatorId: '',
-  VerifyRemark: '',
 })
 
 const stationInList = ref([])
@@ -259,14 +243,6 @@ const currentBatch = computed(() => {
   return stationInList.value.find(item => item.lotCode === form.LotCode) || null
 })
 
-const mockBatch = computed(() => batches.find(item => item.LotCode === form.LotCode) || null)
-
-const currentWorkOrder = computed(() => mockBatch.value ? getBatchWorkOrder(mockBatch.value) || null : null)
-const currentRouteSteps = computed(() => currentWorkOrder.value ? getRouteStepRows(currentWorkOrder.value.RouteId) : [])
-const currentStepIndex = computed(() => {
-  const process = mockBatch.value ? getCurrentProcess(mockBatch.value) : null
-  return currentRouteSteps.value.findIndex((item) => item.Id === process?.RouteStepId)
-})
 const previousStepLabel = computed(() => {
   // 新接口 station-in/detail 返回 previousOperationName（首工序时显示"首工序，无上一道"）
   const name = stationInDetail.value?.previousOperationName
@@ -289,19 +265,7 @@ const processCompliance = computed(() => {
   }
   return { pass: true, type: 'success', message: `当前待进站工序「${d.currentPendingOperationName || '-'}」满足进站要求。` }
 })
-const currentLine = computed(() => {
-  // 优先取 station-in/detail 返回的产线（后端直接绑定 lineId/lineName）
-  const d = stationInDetail.value
-  if (d?.lineName || d?.lineId) {
-    return { LineName: d.lineName || '-', LineCode: d.lineName || '', Id: d.lineId || null }
-  }
-  if (currentBatch.value?.lineName) {
-    return { LineName: currentBatch.value.lineName, LineCode: currentBatch.value.lineName, Id: currentBatch.value.lineId || null }
-  }
-  return mockBatch.value ? getBatchLine(mockBatch.value) : null
-})
 // 当前待进站工站：后端 station-in/detail 直接返回 currentPendingStationId / currentPendingStationName
-// 该接口 3. 文档明确：工站由 routeStepId 自动推导，前端只展示
 const currentStation = computed(() => {
   const d = stationInDetail.value
   if (!d) return null
@@ -312,20 +276,12 @@ const currentStation = computed(() => {
       StationCode: d.stationCode || '',
     }
   }
-  // mock 兜底
-  const step = currentRouteSteps.value[currentStepIndex.value]
-  if (step?.StationId) return findStation(step.StationId)
-  const lineId = currentLine.value?.Id
-  const operationId = step?.OperationId
-  if (lineId && operationId) return findStationByLineOperation(lineId, operationId)
   return null
 })
 const currentStationEquipment = computed(() => {
-  // 新接口 station-in/detail 返回 equipmentTypeName（当前工序绑定的设备类型名称）
   const d = stationInDetail.value
   if (d?.equipmentTypeName) return { EquipmentTypeName: d.equipmentTypeName, EquipmentTypeNameRaw: d.equipmentTypeName }
-  if (!currentStation.value) return null
-  return getStationEquipment(currentStation.value.Id)
+  return null
 })
 // BOM 封装匹配校验：完全依赖后端 station-in/detail 返回的 bomVerifyPassed/bomVerifyMessage
 //  - true → 激活 BOM 全部封装类型都在本工序设备类型支持列表中

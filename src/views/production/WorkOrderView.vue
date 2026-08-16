@@ -16,11 +16,7 @@ import {
   releaseWorkOrder,
   resumeWorkOrder,
 } from '@/api/workOrder'
-import {
-  WORK_ORDER_STATUS_CODE,
-  products,
-  routeOptionsByProduct,
-} from '@/utils/mockData'
+import { WORK_ORDER_STATUS_CODE } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -35,7 +31,7 @@ const operatingAction = ref('')
 const filters = reactive({ workOrderCode: '', productId: '', status: '' })
 const form = reactive({ ProductId: '', RouteId: '', PlannedQuantity: 1000, DueDate: '' })
 const workOrderStatusCodes = [1, 2, 3, 4, 5, 6]
-const productOptions = ref([...products])
+const productOptions = ref([])
 const routeOptions = ref([])
 const workOrderRows = ref([])
 const pagination = reactive({ pageNum: 1, pageSize: 5, total: 0 })
@@ -54,9 +50,7 @@ const selectedProduct = computed(() => productOptions.value.find((product) => pr
 const availableRoutes = computed(() => {
   if (!selectedProduct.value) return []
   const productTypeId = selectedProduct.value.ProductTypeId
-  const matchedRoutes = routeOptions.value.filter((route) => !productTypeId || route.ProductTypeId === productTypeId)
-  if (matchedRoutes.length) return matchedRoutes
-  return routeOptionsByProduct(Number(form.ProductId))
+  return routeOptions.value.filter((route) => !productTypeId || route.ProductTypeId === productTypeId)
 })
 const selectedRoute = computed(() => availableRoutes.value.find((route) => route.Id === Number(form.RouteId)))
 const actionConfig = {

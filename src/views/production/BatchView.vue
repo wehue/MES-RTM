@@ -5,11 +5,7 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import MetricCard from '@/components/MetricCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import { BATCH_STATUS, statusMeta } from '@/utils/constants'
-import {
-  BATCH_STATUS_CODE,
-  findUser,
-  getWorkOrderRoute,
-} from '@/utils/mockData'
+import { BATCH_STATUS_CODE } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { getBatchList, getBatchStatusStats, updateBatchStatus, createBatch } from '@/api/batch'
 import { getLineList } from '@/api/line'
@@ -45,7 +41,7 @@ const workOrderDetail = ref({})
 const canPlanBatch = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
 const canCoordinateBatch = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR', 'LEADER']))
 const canQualityLock = computed(() => userStore.hasAnyRole(['QUALITY_ENGINEER', 'PRODUCTION_SUPERVISOR']))
-const currentUserId = computed(() => findUser(userStore.userInfo.username || userStore.userInfo.name)?.Id || 3)
+const currentUserId = computed(() => Number(userStore.userInfo.userId || userStore.userInfo.id) || 3)
 const batchStatusCodes = Object.keys(BATCH_STATUS).map(Number)
 
 async function loadStatusStats() {
@@ -181,7 +177,6 @@ function getCreatedQuantity(order) {
 const availableWorkOrders = computed(() => releasedWorkOrders.value)
 const batchLineOptions = computed(() => lineList.value.map(item => item.lineName || item.LineName).filter(Boolean))
 const selectedWorkOrder = computed(() => releasedWorkOrders.value.find((item) => item.Id === Number(createForm.WorkOrderId)) || null)
-const selectedRoute = computed(() => selectedWorkOrder.value ? getWorkOrderRoute(selectedWorkOrder.value) : null)
 const remainingQty = computed(() => {
   if (!workOrderDetail.value.plannedQuantity) return 0
   return Math.max(workOrderDetail.value.plannedQuantity - getCreatedQuantity(selectedWorkOrder.value), 0)
@@ -191,8 +186,8 @@ const selectedOrderProduct = computed(() => {
   return selectedWorkOrder.value?.ProductName || '请选择可创建批次的工单'
 })
 const selectedOrderPlanned = computed(() => selectedWorkOrder.value ? selectedWorkOrder.value.PlannedQuantity : '-')
-const selectedRouteName = computed(() => selectedRoute.value ? selectedRoute.value.RouteName : '-')
-const selectedFirstStep = computed(() => selectedRoute.value ? '投产后生成首道工序' : '待排产')
+const selectedRouteName = computed(() => workOrderDetail.value.routeName || '-')
+const selectedFirstStep = computed(() => workOrderDetail.value.routeName ? '投产后生成首道工序' : '待排产')
 const generatedBatchRows = computed(() => {
   const count = Math.max(Number(createForm.BatchCount) || 1, 1)
   if (!selectedWorkOrder.value || !workOrderDetail.value.plannedQuantity) return []

@@ -21,31 +21,7 @@ async function loadDetail() {
     batchDetail.value = result
   } catch (error) {
     console.error('Failed to load batch detail:', error)
-    // Mock 兜底：构造批次详情数据
-    const batchId = Number(route.params.id) || 1
-    batchDetail.value = {
-      baseInfo: {
-        lotCode: `B2026051200${batchId}-01`,
-        workOrderCode: 'WO20260512001',
-        productName: '智能控制板 V2.0',
-        productTypeName: 'PCBA',
-        lineName: 'SMT产线 A1',
-        plannedQuantity: 600,
-        goodQuantity: 528,
-        currentOperationName: '贴片',
-        currentStationName: 'ST-A1-03 贴片工站',
-        createdAt: '2026-05-12 08:00:00',
-        status: 2,
-      },
-      flowRecords: [
-        { eventType: 'lot_created', eventTime: '2026-05-12 08:00:00', operationName: '创建批次', quantity: 600 },
-        { eventType: 'station_in', eventTime: '2026-05-12 08:42:00', operationName: '印刷', sequence: 10, quantity: 600 },
-        { eventType: 'station_out', eventTime: '2026-05-12 09:02:00', operationName: '印刷', sequence: 10, quantity: 596, defectQuantity: 4, passRate: 99.3 },
-        { eventType: 'station_in', eventTime: '2026-05-12 09:05:00', operationName: 'SPI 检测', sequence: 20, quantity: 596 },
-        { eventType: 'station_out', eventTime: '2026-05-12 09:28:00', operationName: 'SPI 检测', sequence: 20, quantity: 590, defectQuantity: 6, passRate: 99.0 },
-        { eventType: 'station_in', eventTime: '2026-05-12 09:33:00', operationName: '贴片', sequence: 30, quantity: 590 },
-      ],
-    }
+    batchDetail.value = { baseInfo: {}, flowRecords: [] }
   } finally {
     loading.value = false
   }
