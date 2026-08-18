@@ -65,26 +65,67 @@ export function getStationInDetail(lotCode) {
   return request.get('/station-in/detail', { params: { lotCode } })
 }
 
-// 获取可出站批次列表（出站操作用）
-// 接口：GET /api/lots/station-out/list
-// 用途：出站操作页面左侧列表，展示所有当前工序已进站可出站的批次
-export function getStationOutList() {
-  return request.get('/lots/station-out/list')
+// 获取可出站批次列表（出站操作用，分页）
+// 接口：GET /api/station-out/list
+// 用途：出站操作页面「可出站批次列表」表格，后端筛选：
+//        ① 至少有一道已进站(Status=2)且待出站的工序
+//        ② 批次状态 = 生产中(Status=2)
+//        ③ 待出站数量 > 0
+//        ④ 排序：创建时间 DESC
+// 入参仅支持 pageNum / pageSize，不支持 keyword、lineId
+// Query 参数：
+//   pageNum  int  可选，页码（从 1 开始，默认 1）
+//   pageSize int  可选，每页大小（默认 20）
+// 返回 data：{ pageNum, pageSize, total, totalPages, list: [{lotId, lotCode, productCode, productName,
+//           lineName, plannedQuantity, completedQuantity, pendingStationOutQuantity,
+//           currentPendingOperationName, lotStatusName, createdAt}] }
+// pendingStationOutQuantity = 当前工序累计进站数量 − 该工序历史累计成品出站数量
+// currentPendingOperationName = Status=2 且 Sequence 最小的待出站工序
+export function getStationOutList(params) {
+  return request.get('/station-out/list', { params })
 }
 
-// 按批次号查询出站详情
-// 接口：GET /api/lots/station-out/detail
-// 用途：出站操作页面右侧详情，展示当前工序、进站数量、批次状态等信息
+// 按批次号查询出站批次基本资料
+// 接口：GET /api/station-out/detail
+// 用途：出站操作页面「批次与出站信息」展示，选择批次后查看该批次的数据
+// Query 参数：
+//   lotCode  string  必填，批次号（接口1列表返回的 lotCode）
+// 返回 data（出站批次基本资料VO）：
+//   基础信息：lotId, lotCode, productCode, productName, lineName,
+//             plannedQuantity, completedQuantity, pendingStationOutQuantity,
+//             currentPendingOperationName, currentPendingStationName,
+//             previousOperationName, currentPendingOperationStatusName,
+//             equipmentTypeName, lotStatusName, createdAt
+// pendingStationOutQuantity = 当前工序累计进站数量 − 该工序历史累计完工出站数量
+// 无BOM校验
 export function getStationOutDetail(lotCode) {
-  return request.get('/lots/station-out/detail', { params: { lotCode } })
+  return request.get('/station-out/detail', { params: { lotCode } })
 }
 
-// 执行出站
-// 接口：POST /api/station-out
-// 用途：出站操作页面提交“执行出站”；后端自动确定当前已进站工序，更新工序状态为已出站并写入出站历史记录
-// 参数：{ lotId, routeStepId, operatorId, finishedQuantity, defectQuantity, disposalType, disposalRemark, spiPassRate, aoiPassRate, remark }
+// 确认出站操作
+// 接口：POST /api/station-out/confirm
+// 用途：出站操作页面提交"确认出站"；一个事务只写2张表：
+//        ① UPDATE 工序状态 Status=2→3，写出站时间/完工数量累加/不良数量累加
+//        ② INSERT 出站历史流水
+//      Token规则：CreatedBy/UpdatedBy 用 Token 解析的当前登录人；OperatorId 用前端传的 dto.operatorId
+//      普通工序传 finishedQuantity+defectQuantity；SPI/AOI检测工序只对应 passRate
+//      异常出站(isNormal=0)或有不良(defectQuantity>0)必须填 disposalRemark
+// Body 参数：
+//   lotId             int64  【必填】批次ID
+//   operatorId        int64  【必填】出站操作员ID（谁具体干活）
+//   finishedQuantity  int32  普通工序必填，检测工序不用传；必须>0且≤待出站数量
+//   defectQuantity    int32  普通工序选填，默认0；>0时 disposalRemark 必填
+//   spiPassRate       number SPI检测工序必填，范围0-100
+//   aoiPassRate       number AOI检测工序必填，范围0-100
+//   isNormal          int32  是否正常出站：1-正常【默认】，0-异常
+//   disposalType      int32  不良处置方式：1-维修，2-报废，3-强制出站（isNormal=0时必填）
+//   disposalRemark    string 处置原因/备注（defectQuantity>0 或 isNormal=0 时必填），最长200字符
+// 返回 data（出站确认结果VO）：
+//   lotId, lotCode, routeStepId, operationName, stationName, equipmentId,
+//   stationOutTime, finishedQuantity, defectQuantity, round, isNormal,
+//   spiPassRate, aoiPassRate
 export function createStationOut(data) {
-  return request.post('/station-out', data)
+  return request.post('/station-out/confirm', data)
 }
 
 // 查询待上料批次列表（上料管理列表页用）

@@ -178,10 +178,9 @@ function normalizeStationInDetail(raw) {
     currentPendingOperationName: obj.currentPendingOperationName ?? obj.CurrentPendingOperationName ?? '',
     currentPendingStationId: Number(obj.currentPendingStationId ?? obj.CurrentPendingStationId ?? 0) || null,
     currentPendingStationName: obj.currentPendingStationName ?? obj.CurrentPendingStationName ?? '',
-    // 新接口字段（图 3 新增）
     previousOperationName: obj.previousOperationName ?? obj.PreviousOperationName ?? '',
     currentPendingOperationStatusName: obj.currentPendingOperationStatusName ?? obj.CurrentPendingOperationStatusName ?? '',
-    equipmentTypeName: obj.equipmentTypeName ?? obj.EquipmentTypeName ?? '',
+    equipmentName: obj.equipmentName ?? obj.EquipmentName ?? '',
     lotStatusName: obj.lotStatusName ?? obj.LotStatusName ?? '',
     createdAt: obj.createdAt ?? obj.CreatedAt ?? '',
     bomVerifyPassed: obj.bomVerifyPassed === true || obj.bomVerifyPassed === 'true' || obj.BomVerifyPassed === true,
@@ -280,7 +279,7 @@ const currentStation = computed(() => {
 })
 const currentStationEquipment = computed(() => {
   const d = stationInDetail.value
-  if (d?.equipmentTypeName) return { EquipmentTypeName: d.equipmentTypeName, EquipmentTypeNameRaw: d.equipmentTypeName }
+  if (d?.equipmentName) return { EquipmentName: d.equipmentName }
   return null
 })
 // BOM 封装匹配校验：完全依赖后端 station-in/detail 返回的 bomVerifyPassed/bomVerifyMessage
@@ -468,7 +467,7 @@ async function submit() {
                 </span>
                 <span v-else>-</span>
               </el-descriptions-item>
-              <el-descriptions-item label="设备类型">{{ currentStationEquipment?.EquipmentTypeName || stationInDetail?.equipmentTypeName || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="设备名称">{{ currentStationEquipment?.EquipmentName || stationInDetail?.equipmentName || '-' }}</el-descriptions-item>
               <el-descriptions-item label="上一工序">{{ previousStepLabel }}</el-descriptions-item>
               <el-descriptions-item label="批次状态">
                 <StatusTag v-if="stationInDetail?.lotStatus" :meta="statusMeta(BATCH_STATUS, stationInDetail.lotStatus)" />

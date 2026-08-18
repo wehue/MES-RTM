@@ -4,7 +4,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusTag from '@/components/StatusTag.vue'
-import { BATCH_STATUS, statusMeta } from '@/utils/constants'
+import { BATCH_STATUS, PROCESS_STATUS, statusMeta } from '@/utils/constants'
+import { formatDateTime } from '@/utils/format'
 import {
   BATCH_STATUS_CODE,
   DISPOSAL_TYPE_CODE,
@@ -14,6 +15,11 @@ import {
 import { useUserStore } from '@/stores/user'
 import { getStationOutList, getStationOutDetail, createStationOut } from '@/api/batch'
 import { getOperators } from '@/api/user'
+
+// 批次状态中文名 → 数字编码（StatusTag 依赖数字编码）
+const LOT_STATUS_NAME_MAP = { '待生产': 1, '生产中': 2, '暂停': 3, '维修中': 4, '已锁定': 5, '已完成': 6 }
+// 工序状态中文名 → 数字编码
+const OPERATION_STATUS_NAME_MAP = { '待进站': 1, '已进站': 2, '已出站': 3, '暂停': 4, '锁定': 5, '跳过': 6 }
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -65,22 +71,119 @@ function getOperatorLabel(user) {
   return [name, position, dept].filter(Boolean).join(' / ')
 }
 
+// 归一化 GET /api/station-out/list 返回的单条可出站批次
+function normalizeStationOutItem(item) {
+  if (!item) return null
+  const lotStatusName = item.lotStatusName ?? item.LotStatusName ?? ''
+  return {
+    lotId: Number(item.lotId ?? item.LotId ?? 0),
+    lotCode: item.lotCode ?? item.LotCode ?? '',
+    productCode: item.productCode ?? item.ProductCode ?? '',
+    productName: item.productName ?? item.ProductName ?? '',
+    lineName: item.lineName ?? item.LineName ?? '',
+    plannedQuantity: Number(item.plannedQuantity ?? item.PlannedQuantity ?? 0),
+    completedQuantity: Number(item.completedQuantity ?? item.CompletedQuantity ?? 0),
+    pendingStationOutQuantity: Number(item.pendingStationOutQuantity ?? item.PendingStationOutQuantity ?? 0),
+    currentOperation: item.currentPendingOperationName ?? item.CurrentPendingOperationName ?? item.currentOperation ?? '',
+    lotStatusName,
+    lotStatus: LOT_STATUS_NAME_MAP[lotStatusName] ?? null,
+    createdAt: item.createdAt ?? item.CreatedAt ?? '',
+  }
+}
+
+function extractListPayload(data) {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  const payload = (data.data !== undefined) ? data.data : data
+  if (Array.isArray(payload)) return payload
+  if (!payload || typeof payload !== 'object') return []
+  if (Array.isArray(payload.list)) return payload.list
+  if (Array.isArray(payload.rows)) return payload.rows
+  if (Array.isArray(payload.records)) return payload.records
+  if (Array.isArray(payload.content)) return payload.content
+  return []
+}
+
+function extractPaginationMeta(data) {
+  const payload = (data && data.data !== undefined) ? data.data : data
+  const obj = (payload && typeof payload === 'object') ? payload : {}
+  return {
+    total: Number(obj.total ?? obj.Total ?? 0),
+    totalPages: Number(obj.totalPages ?? obj.TotalPages ?? 0),
+    pageNum: Number(obj.pageNum ?? obj.PageNum ?? 1),
+    pageSize: Number(obj.pageSize ?? obj.PageSize ?? 20),
+  }
+}
+
 async function loadStationOutList() {
   listLoading.value = true
   try {
-    const data = await getStationOutList()
-    stationOutList.value = Array.isArray(data) ? data : []
-    listPagination.total = stationOutList.value.length
+    const params = {
+      pageNum: Number(listPagination.pageNum || 1),
+      pageSize: Number(listPagination.pageSize || 5),
+    }
+    console.log('[CheckOut] GET /api/station-out/list 参数：', params)
+    const raw = await getStationOutList(params)
+    console.log('[CheckOut] GET /api/station-out/list 原始返回：', raw)
+    const list = extractListPayload(raw).map(normalizeStationOutItem).filter(Boolean)
+    const meta = extractPaginationMeta(raw)
+    stationOutList.value = list
+    listPagination.total = meta.total > 0 ? meta.total : list.length
+    if (meta.pageSize > 0) listPagination.pageSize = meta.pageSize
+    if (meta.pageNum > 0) listPagination.pageNum = meta.pageNum
     if (!form.LotCode && stationOutList.value.length) {
       form.LotCode = stationOutList.value[0].lotCode
     }
   } catch (error) {
-    console.error('Failed to load station-out list:', error)
+    console.warn('[CheckOut] 可出站批次列表接口失败：', error)
     stationOutList.value = []
     listPagination.total = 0
+    ElMessage.warning('可出站批次列表接口暂不可用，请稍后重试')
   } finally {
     listLoading.value = false
   }
+}
+
+// 归一化 GET /api/station-out/detail 出站批次基础资料
+function normalizeStationOutDetail(raw) {
+  if (!raw) return null
+  // 兼容：直接返回对象 / 外层包了 data / axios 已经在拦截器里取过 data
+  const obj = (raw && raw.data !== undefined && typeof raw.data === 'object' && raw.data !== null) ? raw.data : raw
+  if (!obj || typeof obj !== 'object') return null
+
+  const detail = {
+    lotId: Number(obj.lotId ?? obj.LotId ?? 0),
+    lotCode: obj.lotCode ?? obj.LotCode ?? '',
+    productCode: obj.productCode ?? obj.ProductCode ?? '',
+    productName: obj.productName ?? obj.ProductName ?? '',
+    lineName: obj.lineName ?? obj.LineName ?? '',
+    plannedQuantity: Number(obj.plannedQuantity ?? obj.PlannedQuantity ?? 0),
+    completedQuantity: Number(obj.completedQuantity ?? obj.CompletedQuantity ?? 0),
+    pendingStationOutQuantity: Number(obj.pendingStationOutQuantity ?? obj.PendingStationOutQuantity ?? 0),
+    currentPendingOperationName: obj.currentPendingOperationName ?? obj.CurrentPendingOperationName ?? '',
+    currentPendingStationName: obj.currentPendingStationName ?? obj.CurrentPendingStationName ?? '',
+    previousOperationName: obj.previousOperationName ?? obj.PreviousOperationName ?? '',
+    currentPendingOperationStatusName: obj.currentPendingOperationStatusName ?? obj.CurrentPendingOperationStatusName ?? '',
+    equipmentName: obj.equipmentName ?? obj.EquipmentName ?? '',
+    lotStatusName: obj.lotStatusName ?? obj.LotStatusName ?? '',
+    createdAt: obj.createdAt ?? obj.CreatedAt ?? '',
+  }
+
+  // 兼容字段（供模板、旧逻辑仍在引用的字段兜底）：
+  detail.currentOperation = detail.currentPendingOperationName
+  detail.stationName = detail.currentPendingStationName
+  detail.stationId = null // 新接口暂未返回 stationId，用 stationName 展示即可
+  detail.stationCode = ''
+  // 进站数量：出站场景下，待出站数量即为当前工序进站数量（累计进站 - 历史完工出站）
+  detail.stationInQuantity = detail.pendingStationOutQuantity
+
+  // 批次状态数字编码反映射（StatusTag 依赖数字编码通过 statusMeta 查颜色/描述）
+  detail.lotStatus = LOT_STATUS_NAME_MAP[detail.lotStatusName] ?? null
+
+  // 工序状态数字编码反映射
+  detail.operationStatus = OPERATION_STATUS_NAME_MAP[detail.currentPendingOperationStatusName] ?? null
+
+  return detail
 }
 
 async function loadStationOutDetail(lotCode) {
@@ -90,11 +193,14 @@ async function loadStationOutDetail(lotCode) {
   }
   detailLoading.value = true
   try {
-    const data = await getStationOutDetail(lotCode)
-    stationOutDetail.value = data
+    console.log('[CheckOut] GET /api/station-out/detail 参数：', { lotCode })
+    const raw = await getStationOutDetail(lotCode)
+    console.log('[CheckOut] GET /api/station-out/detail 原始返回：', raw)
+    stationOutDetail.value = normalizeStationOutDetail(raw)
   } catch (error) {
-    console.error('Failed to load station-out detail:', error)
+    console.warn('[CheckOut] 出站批次基础资料接口失败：', error)
     stationOutDetail.value = null
+    ElMessage.warning('出站批次基础资料接口暂不可用，请稍后重试')
   } finally {
     detailLoading.value = false
   }
@@ -107,20 +213,17 @@ onMounted(() => {
 
 function handlePageChange(pageNum) {
   listPagination.pageNum = pageNum
+  loadStationOutList()
 }
 
 function handleSizeChange(pageSize) {
   listPagination.pageSize = pageSize
   listPagination.pageNum = 1
+  loadStationOutList()
 }
 
-const pagedStationOutList = computed(() => {
-  const start = (listPagination.pageNum - 1) * listPagination.pageSize
-  const end = start + listPagination.pageSize
-  return stationOutList.value.slice(start, end)
-})
-
-const availableBatches = computed(() => pagedStationOutList.value)
+// 后端分页：stationOutList 即当前页数据
+const availableBatches = computed(() => stationOutList.value)
 
 const currentBatch = computed(() => {
   return stationOutList.value.find(item => item.lotCode === form.LotCode) || null
@@ -128,28 +231,52 @@ const currentBatch = computed(() => {
 
 const canForce = computed(() => userStore.hasAnyRole(['PRODUCTION_SUPERVISOR']))
 const isLocked = computed(() => stationOutDetail.value?.lotStatus === BATCH_STATUS_CODE.locked)
-const currentInQty = computed(() => Number(stationOutDetail.value?.stationInQuantity) || 0)
-const currentOperationName = computed(() => stationOutDetail.value?.currentOperation || '-')
+const currentInQty = computed(() => {
+  // 优先取 station-out/detail 返回的 pendingStationOutQuantity（即待出站数量 = 进站数量 - 已完工出站）
+  if (stationOutDetail.value?.pendingStationOutQuantity != null) {
+    return Number(stationOutDetail.value.pendingStationOutQuantity) || 0
+  }
+  if (stationOutDetail.value?.stationInQuantity != null) {
+    return Number(stationOutDetail.value.stationInQuantity) || 0
+  }
+  return Number(currentBatch.value?.pendingStationOutQuantity) || 0
+})
+const currentOperationName = computed(() =>
+  stationOutDetail.value?.currentPendingOperationName
+  || stationOutDetail.value?.currentOperation
+  || currentBatch.value?.currentOperation
+  || '-'
+)
+const previousStepLabel = computed(() => {
+  const name = stationOutDetail.value?.previousOperationName
+  return name && String(name).trim() ? name : '-'
+})
 const currentStation = computed(() => {
-  const detail = stationOutDetail.value
-  if (!detail) return null
-  if (detail.stationId || detail.StationId || detail.stationName) {
+  const d = stationOutDetail.value
+  if (!d) return null
+  // 新接口 station-out/detail 返回 currentPendingStationName（工站名称）
+  if (d.currentPendingStationName || d.stationName || d.currentPendingStationId) {
     return {
-      Id: detail.stationId || detail.StationId,
-      StationName: detail.stationName || '-',
-      StationCode: detail.stationCode || '',
-      EquipmentId: detail.equipmentId,
+      Id: d.currentPendingStationId || d.stationId || d.StationId,
+      StationName: d.currentPendingStationName || d.stationName || '-',
+      StationCode: d.stationCode || '',
     }
   }
   return null
 })
 const currentStationEquipment = computed(() => {
-  const detail = stationOutDetail.value
-  if (detail?.equipmentCode || detail?.equipmentName || detail?.equipmentTypeName) {
+  const d = stationOutDetail.value
+  // 新接口返回 equipmentName（设备名称）
+  if (d?.equipmentName) {
     return {
-      EquipmentCode: detail.equipmentCode || '',
-      EquipmentName: detail.equipmentName || '-',
-      EquipmentTypeName: detail.equipmentTypeName || '',
+      EquipmentName: d.equipmentName,
+      EquipmentCode: d.equipmentCode || '',
+    }
+  }
+  if (d?.equipmentCode) {
+    return {
+      EquipmentCode: d.equipmentCode,
+      EquipmentName: '-',
     }
   }
   return null
@@ -206,6 +333,40 @@ function syncDefectQuantity(value) {
   }
 }
 
+// 归一化 POST /api/station-out/confirm 出站确认结果
+function normalizeStationOutResult(raw) {
+  if (!raw) return null
+  const obj = (raw && raw.data !== undefined && typeof raw.data === 'object' && raw.data !== null) ? raw.data : raw
+  if (!obj || typeof obj !== 'object') return null
+  return {
+    lotId: Number(obj.lotId ?? obj.LotId ?? 0),
+    lotCode: obj.lotCode ?? obj.LotCode ?? '',
+    routeStepId: Number(obj.routeStepId ?? obj.RouteStepId ?? 0) || null,
+    operationName: obj.operationName ?? obj.OperationName ?? '',
+    stationName: obj.stationName ?? obj.StationName ?? '',
+    equipmentId: Number(obj.equipmentId ?? obj.EquipmentId ?? 0) || null,
+    stationOutTime: obj.stationOutTime ?? obj.StationOutTime ?? '',
+    finishedQuantity: Number(obj.finishedQuantity ?? obj.FinishedQuantity ?? 0),
+    defectQuantity: Number(obj.defectQuantity ?? obj.DefectQuantity ?? 0),
+    round: Number(obj.round ?? obj.Round ?? 1),
+    isNormal: Number(obj.isNormal ?? obj.IsNormal ?? 1),
+    spiPassRate: obj.spiPassRate ?? obj.SpiPassRate ?? null,
+    aoiPassRate: obj.aoiPassRate ?? obj.AoiPassRate ?? null,
+    disposalType: obj.disposalType ?? obj.DisposalType ?? null,
+    // 兼容旧字段（若后端后续补充）
+    lastStationOut: obj.lastStationOut ?? obj.LastStationOut ?? false,
+    lotStatus: obj.lotStatus ?? obj.LotStatus ?? null,
+  }
+}
+
+// 根据工序名判断检测类型：SPI / AOI / 通用检测
+function detectInspectionType(opName) {
+  const name = String(opName || '').toUpperCase()
+  if (name.includes('SPI')) return 'SPI'
+  if (name.includes('AOI')) return 'AOI'
+  return 'GENERIC'
+}
+
 async function submit() {
   if (submitting.value) return
   if (!currentBatch.value) {
@@ -216,10 +377,21 @@ async function submit() {
     ElMessage.error('批次已锁定')
     return
   }
+  const operatorId = Number(form.OperatorId)
+  if (!operatorId) {
+    ElMessage.error('请选择操作人')
+    return
+  }
+  const lotId = stationOutDetail.value?.lotId ?? currentBatch.value?.lotId ?? 0
+  if (!lotId) {
+    ElMessage.error('未找到当前批次 ID，无法提交出站')
+    return
+  }
   if (!isInspection.value && !quantityValid.value) {
     ElMessage.error(`数量不匹配：进站数量 ${currentInQty.value}，出站合计 ${checkoutTotal.value}`)
     return
   }
+  // 普通工序：有不良且选了「强制出站」→ 角色权限 + 原因必填
   if (!isInspection.value && form.DefectQuantity > 0 && form.DisposalType === DISPOSAL_TYPE_CODE.force && !canForce.value) {
     ElMessage.error('当前角色没有强制出站权限')
     return
@@ -228,6 +400,7 @@ async function submit() {
     ElMessage.error('请填写强制出站原因')
     return
   }
+  // 检测工序：低于阈值 → 必须选 强制出站 或 批次锁定
   if (isInspection.value && !inspectionPass.value && !['force', 'lock'].includes(form.QualityAction)) {
     ElMessage.error('检测通过率低于阈值，请选择强制出站或批次锁定')
     return
@@ -241,85 +414,126 @@ async function submit() {
     return
   }
 
-  const lotId = currentBatch.value?.lotId || stationOutDetail.value?.lotId || 0
-
+  // ========== 严格对齐 POST /api/station-out/confirm 契约 ==========
   const submitData = {
     lotId: Number(lotId),
-    routeStepId: currentBatch.value?.routeStepId || stationOutDetail.value?.routeStepId || null,
-    operatorId: Number(form.OperatorId),
+    operatorId,
   }
 
+  let actionFlags = { isRepair: false, isLock: false }
+
   if (isInspection.value) {
-    submitData.passRate = form.PassRate
+    // ---- 检测工序：传 spiPassRate / aoiPassRate；不传 finished/defect ----
+    const inspType = detectInspectionType(currentOperationName.value)
+    const passRateVal = Number(form.PassRate)
+    if (inspType === 'SPI') submitData.spiPassRate = passRateVal
+    else if (inspType === 'AOI') submitData.aoiPassRate = passRateVal
+    else {
+      // 通用检测（未明确 SPI/AOI）：两个都传，后端按工序类型自行取对应字段
+      submitData.spiPassRate = passRateVal
+      submitData.aoiPassRate = passRateVal
+    }
+
     if (inspectionPass.value) {
-      submitData.stationOutHandle = 0
-    } else if (form.QualityAction === 'force') {
-      submitData.stationOutHandle = 1
-      submitData.disposalRemark = form.ForceReason
-    } else if (form.QualityAction === 'lock') {
-      submitData.stationOutHandle = 2
-      submitData.disposalRemark = form.ForceReason
+      submitData.isNormal = 1
+    } else {
+      submitData.isNormal = 0
+      // isNormal=0 时 disposalType 必填：3-强制出站（含 lock，区别在 disposalRemark）
+      submitData.disposalType = DISPOSAL_TYPE_CODE.force
+      submitData.disposalRemark = form.ForceReason || ''
+      if (form.QualityAction === 'lock') actionFlags.isLock = true
     }
   } else {
-    submitData.finishedQuantity = form.FinishedQuantity
-    submitData.defectQuantity = form.DefectQuantity
-    if (form.DefectQuantity > 0) {
-      submitData.disposalType = form.DisposalType
-      submitData.disposalRemark = form.DisposalRemark || form.ForceReason || ''
+    // ---- 普通工序：传 finishedQuantity / defectQuantity；不传 spi/aoi ----
+    const finishedQuantity = Number(form.FinishedQuantity)
+    const defectQuantity = Number(form.DefectQuantity)
+
+    if (!(finishedQuantity > 0)) {
+      ElMessage.error('完工出站数量必须大于 0')
+      return
+    }
+    if (finishedQuantity + defectQuantity !== currentInQty.value) {
+      ElMessage.error(`数量不匹配：进站数量 ${currentInQty.value}，出站合计 ${finishedQuantity + defectQuantity}`)
+      return
+    }
+    submitData.finishedQuantity = finishedQuantity
+    if (defectQuantity > 0) {
+      submitData.defectQuantity = defectQuantity
+      submitData.isNormal = 0
+      // defectQuantity>0 时 disposalType 必填（接口契约：1维修 2报废 3强制出站）
+      submitData.disposalType = Number(form.DisposalType) || DISPOSAL_TYPE_CODE.repair
+      // defectQuantity>0 时 disposalRemark 必填
+      submitData.disposalRemark = (form.DisposalRemark || form.ForceReason || '').trim()
+      if (!submitData.disposalRemark) {
+        const dtName =
+          submitData.disposalType === DISPOSAL_TYPE_CODE.scrap ? '报废' :
+          submitData.disposalType === DISPOSAL_TYPE_CODE.force ? '强制出站' : '维修'
+        ElMessage.error(`请填写${dtName}原因/备注`)
+        return
+      }
+      if (submitData.disposalType === DISPOSAL_TYPE_CODE.repair) actionFlags.isRepair = true
+    } else {
+      submitData.isNormal = 1
     }
   }
 
   submitting.value = true
   try {
-    console.log('=== 出站提交数据 ===')
-    console.log('stationOutHandle:', submitData.stationOutHandle)
-    console.log('QualityAction:', form.QualityAction)
-    console.log('isInspection:', isInspection.value)
-    
-    const result = await createStationOut(submitData)
+    console.log('[CheckOut] POST /api/station-out/confirm 参数：', submitData)
+    const raw = await createStationOut(submitData)
+    console.log('[CheckOut] POST /api/station-out/confirm 原始返回：', raw)
+    const result = normalizeStationOutResult(raw)
 
-        console.log('=== 出站响应数据 ===')
-    console.log('result:', JSON.stringify(result, null, 2))
-    console.log('result.lotStatus:', result.lotStatus, typeof result.lotStatus)
-    console.log('BATCH_STATUS_CODE.locked:', BATCH_STATUS_CODE.locked)
-    console.log('stationOutHandle === 2:', submitData.stationOutHandle === 2)
-    console.log('result.lotStatus === locked:', result.lotStatus === BATCH_STATUS_CODE.locked)
-
-    if (result.disposalType === DISPOSAL_TYPE_CODE.repair && form.DefectQuantity > 0) {
+    // --- 1) 维修处置 → 跳维修管理 ---
+    if (actionFlags.isRepair || (result?.disposalType === DISPOSAL_TYPE_CODE.repair && (result.defectQuantity > 0 || form.DefectQuantity > 0))) {
       ElMessage.success('出站完成，已生成维修任务，即将跳转到维修管理。')
       router.push('/execution/repair')
       return
     }
 
-    if (submitData.stationOutHandle === 2 || result.lotStatus === BATCH_STATUS_CODE.locked || result.lotStatus === 'locked') {
+    // --- 2) 检测工序锁定批次 → 跳批次管理 ---
+    if (actionFlags.isLock) {
       ElMessage.warning('通过率低于阈值，批次已锁定，即将跳转到批次管理。')
       router.push('/production/batch')
       return
     }
 
-    if (result.lastStationOut) {
-      ElMessage.success('出站完成，当前批次全部工序已结束。')
+    // --- 3) 最后一道工序出站 → 跳批次管理 ---
+    //     （若后端后续补充 lastStationOut=true，则走该分支；否则默认跳下一站进站）
+    const lotCode = result?.lotCode || form.LotCode
+    const operationName = result?.operationName || stationOutDetail.value?.currentPendingOperationName || ''
+    const stationName = result?.stationName || stationOutDetail.value?.currentPendingStationName || ''
+    const round = result?.round || 1
+    const timeStr = result?.stationOutTime || ''
+    const timeLabel = timeStr ? `（${formatDateTime(timeStr)}）` : ''
+
+    if (result?.lastStationOut === true) {
+      ElMessage.success(
+        `出站完成：批次「${lotCode}」「${operationName || '工序'}」@${stationName || '工站'}` +
+        (round > 1 ? ` · 第${round}轮` : '') +
+        `，当前批次全部工序已结束。${timeLabel}`
+      )
       router.push('/production/batch')
     } else {
-      ElMessage.success(`出站完成，当前工序：${result.operationName || ''}，即将跳转到进站操作。`)
+      ElMessage.success(
+        `出站完成：批次「${lotCode}」「${operationName || '工序'}」@${stationName || '工站'}` +
+        (round > 1 ? ` · 第${round}轮` : '') +
+        `，即将跳转到进站操作。${timeLabel}`
+      )
       router.push({
         path: '/execution/check-in',
-        query: {
-          LotCode: result.lotCode || form.LotCode,
-        },
+        query: { LotCode: lotCode },
       })
     }
   } catch (error) {
-    console.log('=== 出站响应失败 ===')
-    console.log('error:', error)
-    console.log('error.response:', error.response ? JSON.stringify(error.response.data, null, 2) : 'undefined')
-    console.log('error.message:', error.message)
-    if (submitData.stationOutHandle === 2 || form.QualityAction === 'lock') {
-      // ElMessage.warning('批次已锁定，即将跳转到批次管理。')
+    console.warn('[CheckOut] 出站提交失败：', error)
+    // 锁定动作失败兜底：仍尝试跳转批次管理（便于用户继续处理异常）
+    if (actionFlags.isLock) {
       router.push('/production/batch')
       return
     }
-    ElMessage.error(error.message || '出站失败')
+    const message = (error && error.message) ? error.message : '出站提交失败，请稍后重试'
+    ElMessage.error(message)
   } finally {
     submitting.value = false
   }
@@ -347,21 +561,17 @@ async function submit() {
           @row-click="selectBatch"
         >
           <el-table-column prop="lotCode" label="批次号" min-width="160" align="center"/>
-          <el-table-column prop="workOrderCode" label="工单号" min-width="160" align="center"/>
+          <el-table-column prop="productCode" label="产品编码" min-width="120" align="center"/>
           <el-table-column prop="productName" label="产品名称" min-width="150" align="center"/>
-          <el-table-column label="当前工站" min-width="160" align="center">
+          <el-table-column prop="lineName" label="产线" min-width="120" align="center"/>
+          <el-table-column prop="plannedQuantity" label="计划数量" width="110" align="center"/>
+          <el-table-column prop="completedQuantity" label="已完成数量" width="120" align="center"/>
+          <el-table-column prop="pendingStationOutQuantity" label="待出站数量" width="120" align="center"/>
+          <el-table-column prop="currentOperation" label="当前待出站工序" min-width="130" align="center"/>
+          <el-table-column label="批次状态" min-width="110" align="center">
             <template #default="{ row }">
-              <span v-if="row.stationName || row.currentStationName">{{ row.stationName || row.currentStationName }}</span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="currentOperation" label="当前工序" min-width="160" align="center"/>
-          <el-table-column prop="stationInQuantity" label="进站数量" width="180" align="center"/>
-          <el-table-column label="状态" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag v-if="row.isNormal === false" type="danger">参数不正常</el-tag>
-              <el-tag v-else-if="row.isNormal === true" type="success">正常</el-tag>
-              <span v-else>-</span>
+              <StatusTag v-if="row.lotStatus" :meta="statusMeta(BATCH_STATUS, row.lotStatus)" />
+              <span v-else>{{ row.lotStatusName || '-' }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -380,36 +590,38 @@ async function submit() {
 
       <SectionCard v-if="currentBatch" class="span-12" title="批次与出站信息">
         <el-form label-position="top">
-          <el-form-item label="选择批次">
-            <el-select v-model="form.LotCode" filterable class="full">
+          <el-form-item label="扫码 / 输入批次号">
+            <el-select v-model="form.LotCode" filterable class="full lot-select">
               <el-option v-for="item in stationOutList" :key="item.lotCode" :label="item.lotCode" :value="item.lotCode" />
             </el-select>
           </el-form-item>
         </el-form>
         <el-alert v-if="isLocked" title="批次已锁定" type="error" show-icon :closable="false" />
-        <el-descriptions :column="1" border style="margin-top: 10px" v-loading="detailLoading">
-          <el-descriptions-item label="批次号">{{ currentBatch.lotCode }}</el-descriptions-item>
-          <el-descriptions-item label="产品名称">{{ stationOutDetail?.productName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="当前工序">{{ currentOperationName }}</el-descriptions-item>
+        <el-descriptions :column="1" border label-width="130px" style="margin-top: 10px" v-loading="detailLoading">
+
+          <el-descriptions-item label="待出站数量">
+            <span>{{ currentInQty }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="当前待出站工序">{{ currentOperationName }}</el-descriptions-item>
+
           <el-descriptions-item label="当前工站">
-            <span v-if="currentStation?.StationName" class="station-highlight">
+            <span v-if="currentStation?.StationName">
               {{ currentStation.StationName }}
               <span v-if="currentStation.StationCode" class="station-code">（{{ currentStation.StationCode }}）</span>
             </span>
             <span v-else>-</span>
           </el-descriptions-item>
-          <el-descriptions-item label="绑定设备">
-            <span v-if="currentStationEquipment">
-              {{ currentStationEquipment.EquipmentCode || '' }} / {{ currentStationEquipment.EquipmentName || '-' }}
-            </span>
-            <span v-else>-</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="进站数量">{{ currentInQty }}</el-descriptions-item>
-          <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
+          <el-descriptions-item label="上一工序">{{ previousStepLabel }}</el-descriptions-item>
+          <el-descriptions-item label="设备名称">{{ currentStationEquipment?.EquipmentName || stationOutDetail?.equipmentName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="批次状态">
             <StatusTag v-if="stationOutDetail?.lotStatus" :meta="statusMeta(BATCH_STATUS, stationOutDetail.lotStatus)" />
-            <span v-else>-</span>
+            <span v-else>{{ stationOutDetail?.lotStatusName || currentBatch?.lotStatusName || '-' }}</span>
           </el-descriptions-item>
+           <el-descriptions-item label="工序状态">
+            <StatusTag v-if="stationOutDetail?.operationStatus" :meta="statusMeta(PROCESS_STATUS, stationOutDetail.operationStatus)" />
+            <span v-else>{{ stationOutDetail?.currentPendingOperationStatusName || '-' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="isInspection" label="检测阈值">{{ inspectionThreshold }}%</el-descriptions-item>
         </el-descriptions>
 
         <el-alert
@@ -487,6 +699,10 @@ async function submit() {
   width: 100%;
 }
 
+.lot-select {
+  max-width: 720px;
+}
+
 .checkout-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -504,6 +720,12 @@ async function submit() {
   }
 }
 
+@media (max-width: 900px) {
+  .lot-select {
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 720px) {
   .checkout-form {
     grid-template-columns: 1fr;
@@ -514,11 +736,6 @@ async function submit() {
   display: flex;
   justify-content: flex-end;
   margin-top: 12px;
-}
-
-.station-highlight {
-  font-weight: 600;
-  color: #2563eb;
 }
 
 .station-code {

@@ -14,7 +14,7 @@ metadata:
 - [x] 上料齐套（MaterialLot API + 视图）
 - [x] 工单管理视图
 - [x] 移除前端注册功能，登录页 UI 重设计
-- [x] 修复 BatchDetailView 通过率显示逻辑（仅在 station_out 且值有效时展示）
+- [x] 为 src/api、src/views 补充注释，清理未使用 mock 引用（2026-08-16）
 
 **待办**
 
