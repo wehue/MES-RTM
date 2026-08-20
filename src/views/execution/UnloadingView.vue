@@ -518,12 +518,14 @@ async function submitUnloading() {
   try {
     // 组装批量提交 payload（对齐 POST /api/unloading/records 新接口）
     const records = unloadingRows.value.map((row) => {
+      const operatorId = Number(row.operatorId) || 0
       const record = {
         loadingRecordId: Number(row.loadingRecordId),
         unloadQuantity: Number(row.unloadQuantity ?? 0),
         actualUsedQuantity: Number(row.actualUsedQuantity ?? 0),
         wastageQuantity: Number(row.wastageQuantity ?? 0),
         reason: Number(row.reason),
+        operatorId,
       }
       // 可选字段：remark（≤200字）
       const remark = String(row.remark || '').trim()
@@ -1453,7 +1455,7 @@ onMounted(async () => {
         max-height="420"
         style="margin-top: 16px"
       >
-        <el-table-column label="物料批次条码" min-width="170" align="center" fixed="left">
+        <el-table-column label="物料批次条码" min-width="150" align="center" fixed="left">
           <template #default="{ row }">
             <span class="barcode-text">{{ row.Barcode }}</span>
           </template>
