@@ -1506,7 +1506,7 @@ onMounted(async () => {
 
         <!-- 步骤 1: 选择已投产批次 -->
         <SectionCard title="① 选择已投产批次">
-          <div class="station-flex" v-loading="batchListLoading">
+          <div class="station-flex batch-grid" v-loading="batchListLoading">
             <el-empty
               v-if="!batchListLoading && !batchList.length"
               description="暂无已投产批次"
@@ -1520,7 +1520,7 @@ onMounted(async () => {
               @click="selectedBatchId = batch.id"
             >
               <div class="station-card-header">
-                <span class="station-seq">批次</span>
+                <el-icon class="station-seq station-seq-icon"><Tickets /></el-icon>
                 <span class="station-code" :title="batch.lotCode">{{ batch.lotCode }}</span>
                 <el-tag
                   v-if="isValidDisplay(batch.currentOperation)"
@@ -1900,7 +1900,8 @@ onMounted(async () => {
     <el-dialog
       v-model="stationRecordsDialogVisible"
       title="工站已上料记录"
-      width="1300px"
+      width="1360px"
+      top="8vh"
       class="station-records-dialog"
     >
       <!-- 摘要信息卡片 -->
@@ -2084,6 +2085,13 @@ onMounted(async () => {
   gap: 14px;
 }
 
+/* 批次卡片专属容器：宽松布局 —— 间距更大、每行更少 */
+.station-flex.batch-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px 24px;   /* 行间距20 列间距24 */
+  padding: 4px 2px;
+}
+
 .station-card {
   position: relative;
   min-width: 0;
@@ -2094,6 +2102,11 @@ onMounted(async () => {
   transition: all 0.2s ease;
   background: #fff;
   box-sizing: border-box;
+}
+
+/* 批次卡片专属：增加内边距 */
+.batch-grid .station-card {
+  padding: 18px 20px;
 }
 
 .station-card:hover {
@@ -2144,11 +2157,14 @@ onMounted(async () => {
   background: var(--rtm-primary-dark);
 }
 
-/* 批次卡片：序号方块用绿色调与工站卡片区分 */
+/* 批次卡片：序号方块用绿色调与工站卡片区分；内部放 Tickets 图标时字号调大 */
 .batch-card .station-seq {
   background: #67c23a;
   width: 28px;
   font-size: 11px;
+}
+.batch-card .station-seq.station-seq-icon {
+  font-size: 16px;
 }
 
 .batch-card.active .station-seq {
